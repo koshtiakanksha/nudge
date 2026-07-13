@@ -1,146 +1,90 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, Tag } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Receipt, Wallet } from "lucide-react";
 import { api } from "@/lib/api";
-import { DashboardSummary } from "@/types/api";
+import { TodaySummary } from "@/types/api";
 import { formatCurrency } from "@/lib/format";
 import { Card, CardLabel } from "@/components/card";
 import { PageHeader } from "@/components/page-header";
-import { BufferRing } from "@/components/buffer-ring";
 
-export default function OverviewPage() {
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+export default function TodayPage() {
+  const [today, setToday] = useState<TodaySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     api
-      .getDashboardSummary()
-      .then(setSummary)
-      .catch((e) => setError(e.message))
+      .getToday()
+      .then(setToday)
+      .catch((e) => setError(e instanceof Error ? e.message : "Could not load Today"))
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) {
-    return (
-      <>
-        <PageHeader title="Overview" subtitle="Where your money stands this month" />
-        <div className="px-8 py-12 text-slate text-sm">Loading your numbers…</div>
-      </>
-    );
-  }
-
-  if (error || !summary) {
-    return (
-      <>
-        <PageHeader title="Overview" subtitle="Where your money stands this month" />
-        <div className="px-8 py-12">
-          <Card className="border-clay/40 bg-clay/5">
-            <p className="text-clay text-sm">
-              Couldn&apos;t load your dashboard ({error || "no data"}). Make sure the backend is running and you&apos;ve
-              completed onboarding under Settings.
-            </p>
-          </Card>
-        </div>
-      </>
-    );
-  }
-
-  const ceilingPct = summary.spend_ceiling
-    ? Math.min(1, summary.month_to_date_spend / summary.spend_ceiling)
-    : null;
-
   return (
     <>
-      <PageHeader title="Overview" subtitle="Where your money stands this month" />
-
-      <div className="px-8 py-8 space-y-6 max-w-5xl">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          <Card className="flex flex-col items-center justify-center md:col-span-1">
-            <BufferRing status={summary.buffer_status} />
+      <PageHeader title="Today" subtitle="Your spending decision center" />
+      <div className="px-8 py-8 max-w-5xl space-y-6">
+        {loading ? (
+          <p className="text-sm text-slate">Calculating today&apos;s safe-to-spend amount...</p>
+        ) : error ? (
+          <Card className="border-clay/40 bg-clay/5">
+            <p className="text-sm text-clay">{error}. Make sure the backend is running.</p>
           </Card>
-
-          <Card className="md:col-span-2">
-            <CardLabel>Month to date</CardLabel>
-            <div className="flex items-end gap-6 mt-1">
-              <div>
-                <p className="text-3xl font-display font-semibold">{formatCurrency(summary.month_to_date_spend)}</p>
-                <p className="text-xs text-slate mt-1 flex items-center gap-1">
-                  <ArrowDownRight size={13} className="text-clay" />
-                  spent
-                </p>
-              </div>
-              <div>
-                <p className="text-3xl font-display font-semibold text-moss">
-                  {formatCurrency(summary.month_to_date_income)}
-                </p>
-                <p className="text-xs text-slate mt-1 flex items-center gap-1">
-                  <ArrowUpRight size={13} className="text-moss" />
-                  income
-                </p>
-              </div>
-            </div>
-
-            {summary.spend_ceiling && (
-              <div className="mt-5">
-                <div className="flex justify-between text-xs text-slate mb-1.5">
-                  <span>Spend ceiling</span>
-                  <span>{formatCurrency(summary.spend_ceiling)}</span>
-                </div>
-                <div className="h-2 rounded-full bg-line overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-moss"
-                    style={{ width: `${(ceilingPct ?? 0) * 100}%` }}
-                  />
-                </div>
-                <p className="text-xs text-slate mt-2">
-                  Projected month-end: <strong className="text-ink">{formatCurrency(summary.projected_month_end)}</strong>
-                </p>
-              </div>
-            )}
-          </Card>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <Card>
-            <CardLabel>Top categories</CardLabel>
-            <div className="space-y-2.5 mt-2">
-              {summary.top_categories.length === 0 && (
-                <p className="text-sm text-slate">No spending yet this month.</p>
-              )}
-              {summary.top_categories.map((c) => (
-                <div key={c.category} className="flex justify-between items-center text-sm">
-                  <span>{c.category}</span>
-                  <span className="font-mono text-ink">{formatCurrency(c.amount)}</span>
-                </div>
-              ))}
+        ) : today && !today.can_calculate ? (
+          <Card className="text-center py-10">
+            <Wallet className="mx-auto text-slate mb-3" size={28} />
+            <p className="text-lg font-display font-semibold">Connect a bank account or upload a statement to calculate your safe-to-spend amount.</p>
+            <div className="flex justify-center gap-3 mt-5">
+              <Link href="/transactions" className="px-4 py-2 bg-moss text-paper rounded-md text-sm">Connect bank</Link>
+              <Link href="/statements" className="px-4 py-2 border border-line rounded-md text-sm">Upload statement</Link>
             </div>
           </Card>
-
-          <div className="space-y-5">
-            <Card className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-clay/10 flex items-center justify-center shrink-0">
-                <AlertTriangle size={17} className="text-clay" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">{summary.recent_anomalies} unusual charges</p>
-                <p className="text-xs text-slate">flagged for review this period</p>
-              </div>
+        ) : today ? (
+          <>
+            <Card className="bg-moss/5 border-moss/20">
+              <CardLabel>Safe to spend today</CardLabel>
+              <p className="text-4xl font-display font-semibold text-moss">{formatCurrency(today.safe_to_spend_today)}</p>
+              <p className="text-lg text-ink mt-2">{today.safe_to_spend_message}</p>
+              <Link href="/afford" className="inline-flex items-center gap-1.5 mt-4 text-sm text-moss hover:underline">
+                Check a purchase <ArrowRight size={14} />
+              </Link>
             </Card>
 
-            <Card className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-gold/10 flex items-center justify-center shrink-0">
-                <Tag size={17} className="text-gold" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">{summary.active_price_watches} active price watches</p>
-                <p className="text-xs text-slate">tracking for a better deal</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <Metric label="Spent this month" value={formatCurrency(today.month_to_date_spending)} />
+              <Metric label="Forecast month-end" value={formatCurrency(today.month_end_forecast)} />
+              <Metric label="Spending ceiling" value={today.spending_ceiling ? formatCurrency(today.spending_ceiling) : "Not set"} />
+              <Metric label="Bills still coming" value={formatCurrency(today.upcoming_bills_total)} icon={<Receipt size={17} />} />
+              <Metric label="Budget health" value={today.budget_health} icon={today.budget_health === "On track" ? <CheckCircle2 size={17} /> : <AlertTriangle size={17} />} />
+              <Metric label="Top risk category" value={today.top_risk_category || "None yet"} />
+            </div>
+
+            <Card>
+              <CardLabel>Recommended action</CardLabel>
+              <p className="text-lg font-medium">{today.recommended_action}</p>
+              <div className="flex flex-wrap gap-3 mt-4">
+                <Link href="/budget" className="px-3 py-2 border border-line rounded-md text-sm hover:bg-line/40">View budget</Link>
+                <Link href="/deals" className="px-3 py-2 border border-line rounded-md text-sm hover:bg-line/40">Find deals</Link>
+                <Link href="/chat" className="px-3 py-2 border border-line rounded-md text-sm hover:bg-line/40">Ask Nudge</Link>
               </div>
             </Card>
-          </div>
-        </div>
+          </>
+        ) : null}
       </div>
     </>
+  );
+}
+
+function Metric({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-slate uppercase tracking-wide">{label}</p>
+        {icon}
+      </div>
+      <p className="text-2xl font-display font-semibold mt-2">{value}</p>
+    </Card>
   );
 }

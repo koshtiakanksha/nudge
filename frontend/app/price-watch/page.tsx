@@ -196,7 +196,7 @@ export default function PriceWatchPage() {
                         </span>
                         {verdict && (
                           <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", VERDICT_STYLES[verdict])}>
-                            {VERDICT_LABEL[verdict] || recommendation.label}
+                            {w.buy_wait_recommendation || VERDICT_LABEL[verdict] || recommendation.label}
                           </span>
                         )}
                       </div>
@@ -209,6 +209,10 @@ export default function PriceWatchPage() {
                     <div><span className="block text-slate">Lowest</span><strong>{stats ? formatCurrency(stats.lowest) : "—"}</strong></div>
                     <div><span className="block text-slate">Highest</span><strong>{stats ? formatCurrency(stats.highest) : "—"}</strong></div>
                     <div><span className="block text-slate">Average</span><strong>{stats ? formatCurrency(stats.average) : "—"}</strong></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="border border-line rounded-md p-2"><span className="block text-slate">Deal score</span><strong>{w.deal_score !== null ? `${Math.round(w.deal_score)}%` : "Limited history"}</strong></div>
+                    <div className="border border-line rounded-md p-2"><span className="block text-slate">Affordability</span><strong>{w.affordability_score !== null ? `${Math.round(w.affordability_score)}%` : "Needs budget"}</strong></div>
                   </div>
 
                   <p className="text-xs text-slate">{recommendation.detail}</p>
@@ -261,6 +265,9 @@ export default function PriceWatchPage() {
               <DetailRow label="Lowest observed" value={statsFor(activeSelection) ? formatCurrency(statsFor(activeSelection)!.lowest) : null} />
               <DetailRow label="Highest observed" value={statsFor(activeSelection) ? formatCurrency(statsFor(activeSelection)!.highest) : null} />
               <DetailRow label="Average" value={statsFor(activeSelection) ? formatCurrency(statsFor(activeSelection)!.average) : null} />
+              <DetailRow label="Deal score" value={activeSelection.deal_score !== null ? `${Math.round(activeSelection.deal_score)}%` : "Limited history"} />
+              <DetailRow label="Affordability score" value={activeSelection.affordability_score !== null ? `${Math.round(activeSelection.affordability_score)}%` : "Needs budget"} />
+              <DetailRow label="Recommendation" value={activeSelection.buy_wait_recommendation} />
               <DetailRow label="Source" value={activeSelection.retailer || "Product page"} />
               <DetailRow label="Last updated" value={activeSelection.price_history.at(-1)?.date ? formatDate(activeSelection.price_history.at(-1)!.date) : null} />
             </div>

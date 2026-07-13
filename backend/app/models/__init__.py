@@ -1,5 +1,6 @@
 from app.db.session import Base  # noqa: F401
 from app.models.anomaly import Anomaly  # noqa: F401
+from app.models.affordability import AffordabilityCheck  # noqa: F401
 from app.models.budget import Budget  # noqa: F401
 from app.models.budget_category import BudgetCategory  # noqa: F401
 from app.models.budget_recommendation import BudgetRecommendation  # noqa: F401
@@ -15,6 +16,7 @@ from app.models.user import User  # noqa: F401
 __all__ = [
     "Base",
     "Anomaly",
+    "AffordabilityCheck",
     "Budget",
     "BudgetCategory",
     "BudgetRecommendation",

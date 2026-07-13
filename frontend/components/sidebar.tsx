@@ -2,39 +2,40 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   Receipt,
   Wallet,
-  TrendingUp,
   Tag,
   MapPin,
   MessageCircle,
   Settings,
-  AlertTriangle,
-  Upload,
-  PieChart,
   Repeat,
+  ShoppingBag,
 } from "lucide-react";
 import { cn } from "@/lib/format";
+import { api } from "@/lib/api";
+import { AppMode } from "@/types/api";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Overview", icon: LayoutDashboard },
-  { href: "/statements", label: "Statements", icon: Upload },
-  { href: "/analysis", label: "Analysis", icon: PieChart },
-  { href: "/transactions", label: "Transactions", icon: Receipt },
+  { href: "/", label: "Today", icon: LayoutDashboard },
+  { href: "/afford", label: "Can I Afford This?", icon: ShoppingBag },
   { href: "/budget", label: "Budget", icon: Wallet },
-  { href: "/smart-budget", label: "AI Budget Builder", icon: Wallet },
-  { href: "/forecast", label: "Forecast", icon: TrendingUp },
-  { href: "/anomalies", label: "Unusual Activity", icon: AlertTriangle },
-  { href: "/recurring", label: "Recurring Bills", icon: Repeat },
+  { href: "/transactions", label: "Transactions", icon: Receipt },
+  { href: "/recurring", label: "Bills", icon: Repeat },
   { href: "/price-watch", label: "Price Watch", icon: Tag },
-  { href: "/deals", label: "Local Deals", icon: MapPin },
+  { href: "/deals", label: "Deals", icon: MapPin },
   { href: "/chat", label: "Ask Nudge", icon: MessageCircle },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const [mode, setMode] = useState<AppMode | null>(null);
+
+  useEffect(() => {
+    api.getAppMode().then(setMode).catch(() => setMode(null));
+  }, []);
 
   return (
     <aside className="w-60 shrink-0 border-r border-line bg-paper hidden md:flex flex-col">
@@ -42,7 +43,19 @@ export function Sidebar() {
         <Link href="/" className="flex items-baseline gap-1.5">
           <span className="font-display text-2xl font-semibold text-moss tracking-tight">Nudge</span>
         </Link>
-        <p className="text-xs text-slate mt-1">Your money, gently managed.</p>
+        <p className="text-xs text-slate mt-1">Spend with a second opinion.</p>
+        {mode && (
+          <div className="mt-3 space-y-1">
+            <div className="flex flex-wrap gap-1">
+              {mode.badges.map((badge) => (
+                <span key={badge} className="text-[10px] bg-gold/10 text-gold px-1.5 py-0.5 rounded-sm">
+                  {badge}
+                </span>
+              ))}
+            </div>
+            {mode.message && <p className="text-[11px] text-slate leading-snug">{mode.message}</p>}
+          </div>
+        )}
       </div>
 
       <nav className="flex-1 px-3 space-y-0.5">

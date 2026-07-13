@@ -8,6 +8,8 @@ from app.core.security import CurrentUser, get_current_user
 from app.db.session import get_db
 from app.models.price_watch import PriceWatch
 from app.schemas.misc import PriceWatchCreate, PriceWatchOut
+from app.api.decision_context import build_decision_context
+from app.services.affordability_service import price_watch_recommendation
 from app.services.claude_service import claude_service
 from app.services.price_intel_service import price_intel_service
 
@@ -38,13 +40,13 @@ async def create_price_watch(
     db.add(watch)
     await db.commit()
     await db.refresh(watch)
-    return _to_out(watch)
+    return await _to_out(db, current.id, watch)
 
 
 @router.get("", response_model=list[PriceWatchOut])
 async def list_price_watches(current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(PriceWatch).where(PriceWatch.user_id == current.id))
-    return [_to_out(w) for w in result.scalars().all()]
+    return [await _to_out(db, current.id, w) for w in result.scalars().all()]
 
 
 @router.post("/{watch_id}/refresh", response_model=PriceWatchOut)
@@ -72,7 +74,7 @@ async def refresh_price_watch(
 
     await db.commit()
     await db.refresh(watch)
-    return _to_out(watch)
+    return await _to_out(db, current.id, watch)
 
 
 @router.delete("/{watch_id}")
@@ -90,7 +92,15 @@ async def delete_price_watch(
     return {"deleted": True}
 
 
-def _to_out(w: PriceWatch) -> PriceWatchOut:
+async def _to_out(db: AsyncSession, user_id, w: PriceWatch) -> PriceWatchOut:
+    ctx = await build_decision_context(db, user_id)
+    remaining = ctx["safe"]["remaining_safe_money"]
+    price = float(w.current_price) if w.current_price is not None else None
+    affordability_score = None if price is None else max(0, min(100, round((remaining - price) / max(price, 1) * 50 + 50, 0)))
+    deal_score = None
+    if price is not None and w.target_price is not None:
+        deal_score = max(0, min(100, round((float(w.target_price) - price) / max(float(w.target_price), 1) * 100 + 70, 0)))
+    recommendation = price_watch_recommendation(price, float(w.target_price) if w.target_price is not None else None, affordability_score or 0)
     return PriceWatchOut(
         id=w.id,
         product_url=w.product_url,
@@ -103,4 +113,7 @@ def _to_out(w: PriceWatch) -> PriceWatchOut:
         verdict=w.verdict,
         verdict_reason=None,
         confidence=float(w.confidence) if w.confidence is not None else None,
+        deal_score=deal_score,
+        affordability_score=affordability_score,
+        buy_wait_recommendation=recommendation,
     )

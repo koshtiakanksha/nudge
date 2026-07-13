@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { CalendarDays, ExternalLink, Info, MapPin, Navigation, Star } from "lucide-react";
 import { api } from "@/lib/api";
-import { Deal } from "@/types/api";
+import { Deal, TodaySummary } from "@/types/api";
 import { Card } from "@/components/card";
 import { PageHeader } from "@/components/page-header";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -53,18 +53,21 @@ export default function DealsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Deal | null>(null);
+  const [today, setToday] = useState<TodaySummary | null>(null);
 
   useEffect(() => {
-    api
-      .getDeals()
-      .then(setDeals)
+    Promise.all([api.getDeals(), api.getToday().catch(() => null)])
+      .then(([dealItems, todaySummary]) => {
+        setDeals(dealItems);
+        setToday(todaySummary);
+      })
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load deals"))
       .finally(() => setLoading(false));
   }, []);
 
   return (
     <>
-      <PageHeader title="Local Deals" subtitle="Discounts, places, and events near you" />
+      <PageHeader title="Deals" subtitle="Budget-aware ideas for food, coffee, events, and weekend plans" />
 
       <div className="px-8 py-6 max-w-5xl">
         {loading ? (
@@ -79,9 +82,16 @@ export default function DealsPage() {
           </Card>
         ) : (
           <>
+            {today?.can_calculate && (
+              <Card className="mb-4 bg-moss/5 border-moss/20">
+                <p className="text-sm text-ink">
+                  You have {formatCurrency(today.safe_to_spend_today)} safe to spend today. Here are options that fit your budget.
+                </p>
+              </Card>
+            )}
             {deals.some((deal) => deal.is_sample) && (
               <Card className="mb-4 bg-gold/5 border-gold/20">
-                <p className="text-sm text-ink">Sample data shown. Connect APIs to view live results.</p>
+                <p className="text-sm text-ink">Demo data shown. Connect live APIs to see real results.</p>
               </Card>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -114,6 +124,9 @@ export default function DealsPage() {
                       )}
                       {(deal.cost || deal.price !== null) && (
                         <span>{deal.cost || (deal.price !== null ? formatCurrency(deal.price) : null)}</span>
+                      )}
+                      {deal.affordability_label && (
+                        <span className="bg-moss/10 text-moss px-1.5 py-0.5 rounded-sm">{deal.affordability_label}</span>
                       )}
                       {deal.starts_at && (
                         <span className="flex items-center gap-1">

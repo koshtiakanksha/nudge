@@ -105,6 +105,9 @@ export interface PriceWatch {
   verdict: "buy_now" | "wait" | "overpriced" | null;
   verdict_reason: string | null;
   confidence: number | null;
+  deal_score: number | null;
+  affordability_score: number | null;
+  buy_wait_recommendation: string | null;
 }
 
 export interface PriceHistoryPoint {
@@ -138,6 +141,7 @@ export interface ProductDeal {
   longitude: number | null;
   last_updated: string | null;
   is_sample: boolean;
+  affordability_label: string | null;
 }
 
 export type Deal = ProductDeal;
@@ -153,8 +157,70 @@ export interface EventRecommendation extends ProductDeal {
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  actions?: { label: string; href: string }[];
   chart_data?: Record<string, unknown> | null;
   created_at?: string;
+}
+
+export interface TodaySummary {
+  safe_to_spend_today: number;
+  safe_to_spend_message: string;
+  can_calculate: boolean;
+  month_to_date_spending: number;
+  month_end_forecast: number;
+  spending_ceiling: number | null;
+  upcoming_bills_total: number;
+  budget_health: string;
+  top_risk_category: string | null;
+  recommended_action: string;
+  remaining_safe_money: number;
+}
+
+export interface AffordabilityCheckRequest {
+  item_name: string;
+  price: number;
+  category: string;
+  need_or_want: string;
+  purchase_date: string;
+  product_url?: string | null;
+  notes?: string | null;
+}
+
+export interface AffordabilityCheck {
+  id: string | null;
+  item_name: string;
+  price: number;
+  category: string;
+  need_or_want: string;
+  purchase_date: string;
+  product_url: string | null;
+  notes: string | null;
+  verdict: string;
+  explanation: string;
+  safe_to_spend_before: number;
+  safe_to_spend_after: number;
+  remaining_before: number;
+  remaining_after: number;
+  category_impact: Record<string, any>;
+  forecast_impact: Record<string, any>;
+  upcoming_bill_risk: string;
+  suggested_actions: string[];
+  created_at: string | null;
+}
+
+export interface BudgetCategoryRecord {
+  id: string;
+  name: string;
+  monthly_limit: number;
+  category_type: "fixed" | "flexible" | "optional" | "savings" | "not_applicable" | string;
+  is_disabled: boolean;
+  is_default: boolean;
+}
+
+export interface AppMode {
+  mode: string;
+  badges: string[];
+  message: string | null;
 }
 
 export interface PlaidItem {

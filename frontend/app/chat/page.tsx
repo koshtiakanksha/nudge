@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { Send } from "lucide-react";
 import { api } from "@/lib/api";
 import { ChatMessage } from "@/types/api";
@@ -28,8 +29,8 @@ export default function ChatPage() {
     setInput("");
     setSending(true);
     try {
-      const { reply } = await api.sendChatMessage(userMsg.content);
-      setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+      const { reply, actions } = await api.sendChatMessage(userMsg.content);
+      setMessages((prev) => [...prev, { role: "assistant", content: reply, actions }]);
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -41,9 +42,10 @@ export default function ChatPage() {
   };
 
   const SUGGESTIONS = [
-    "How much have I spent on dining this month?",
-    "Am I on track with my savings buffer?",
-    "What's my biggest spending category?",
+    "Can I afford a $90 dress?",
+    "Can I go out tonight?",
+    "What can I cut this week?",
+    "Find me dinner deals under $12.",
   ];
 
   return (
@@ -75,6 +77,15 @@ export default function ChatPage() {
               )}
             >
               {m.content}
+              {m.role === "assistant" && m.actions && m.actions.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {m.actions.map((action) => (
+                    <Link key={`${action.label}-${action.href}`} href={action.href} className="text-xs px-2 py-1 rounded-md border border-line bg-paper text-ink hover:bg-line/40">
+                      {action.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         ))}

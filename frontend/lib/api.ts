@@ -33,6 +33,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 export const api = {
   // Users
   getMe: () => request<import("@/types/api").UserProfile>("/users/me"),
+  getAppMode: () => request<import("@/types/api").AppMode>("/app-mode"),
+  getToday: () => request<import("@/types/api").TodaySummary>("/today"),
   updateMe: (payload: Partial<import("@/types/api").UserProfile>) =>
     request<import("@/types/api").UserProfile>("/users/me", {
       method: "PATCH",
@@ -161,8 +163,34 @@ export const api = {
   getDeals: () => request<import("@/types/api").Deal[]>("/deals"),
 
   // Chat
+  checkAffordability: (payload: import("@/types/api").AffordabilityCheckRequest) =>
+    request<import("@/types/api").AffordabilityCheck>("/affordability/check", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  getAffordabilityHistory: () => request<import("@/types/api").AffordabilityCheck[]>("/affordability/history"),
+
+  // Budget actions
+  listBudgetCategories: () => request<import("@/types/api").BudgetCategoryRecord[]>("/budget/categories"),
+  createBudgetCategory: (payload: Omit<import("@/types/api").BudgetCategoryRecord, "id">) =>
+    request<import("@/types/api").BudgetCategoryRecord>("/budget/categories", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateBudgetCategory: (id: string, payload: Omit<import("@/types/api").BudgetCategoryRecord, "id">) =>
+    request<import("@/types/api").BudgetCategoryRecord>(`/budget/categories/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteBudgetCategory: (id: string) => request<{ deleted: boolean }>(`/budget/categories/${id}`, { method: "DELETE" }),
+  rebalanceBudget: (payload: { to_category: string; amount: number; from_category?: string | null; action: string }) =>
+    request<{ message: string; safe_to_spend_change: number; updated_categories: import("@/types/api").BudgetCategoryRecord[] }>("/budget/rebalance", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
   sendChatMessage: (message: string) =>
-    request<{ reply: string; chart_data: Record<string, unknown> | null }>("/chat", {
+    request<{ reply: string; chart_data: Record<string, unknown> | null; actions: { label: string; href: string }[] }>("/chat", {
       method: "POST",
       body: JSON.stringify({ message }),
     }),

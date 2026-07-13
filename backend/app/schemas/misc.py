@@ -66,6 +66,9 @@ class PriceWatchOut(BaseModel):
     verdict: str | None
     verdict_reason: str | None = None
     confidence: float | None
+    deal_score: float | None = None
+    affordability_score: float | None = None
+    buy_wait_recommendation: str | None = None
 
 
 # --- Deals ---
@@ -95,6 +98,7 @@ class DealOut(BaseModel):
     longitude: float | None = None
     last_updated: str | None = None
     is_sample: bool = False
+    affordability_label: str | None = None
 
 
 # --- Chat ---
@@ -105,6 +109,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     chart_data: dict | None = None
+    actions: list[dict] = []
 
 
 class ChatHistoryItem(BaseModel):
