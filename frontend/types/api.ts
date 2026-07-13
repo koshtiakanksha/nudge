@@ -17,7 +17,14 @@ export interface Transaction {
   merchant_name: string | null;
   category: string | null;
   nudge_category: string | null;
+  subcategory?: string | null;
+  transaction_type?: string | null;
   is_non_negotiable: boolean;
+  is_recurring?: boolean;
+  is_anomaly?: boolean;
+  is_ignored?: boolean;
+  confidence_score?: number | null;
+  raw_description?: string | null;
 }
 
 export interface TransactionListResponse {
@@ -155,4 +162,121 @@ export interface PlaidItem {
   institution_name: string;
   accounts: { account_id: string; name: string; type: string; mask: string; balance: number }[];
   last_synced_at: string | null;
+}
+
+export interface StatementUpload {
+  id: string;
+  file_name: string;
+  file_type: string;
+  statement_month: string;
+  bank_name: string | null;
+  upload_date: string;
+  status: "uploaded" | "parsed" | "failed" | "reviewed" | string;
+  error_message: string | null;
+}
+
+export interface StatementUploadResponse {
+  statement: StatementUpload;
+  parsed_count: number;
+  needs_mapping: boolean;
+  message: string;
+}
+
+export interface StatementTransaction {
+  id: string;
+  transaction_id: string;
+  date: string;
+  description: string;
+  merchant_name: string | null;
+  amount: number;
+  transaction_type: string;
+  category: string | null;
+  subcategory: string | null;
+  bank_name: string | null;
+  source_statement_id: string | null;
+  raw_description: string | null;
+  confidence_score: number | null;
+  location_city: string | null;
+  location_state: string | null;
+  location_country: string | null;
+  currency: string;
+  is_recurring: boolean;
+  is_anomaly: boolean;
+  is_ignored: boolean;
+}
+
+export interface SpendingSummary {
+  total_income: number;
+  total_spending: number;
+  net_cash_flow: number;
+  average_daily_spending: number;
+  average_weekly_spending: number;
+  savings_rate: number | null;
+  transaction_count: number;
+  months_of_history: number;
+  prediction_message: string | null;
+  expected_next_month_spending: number | null;
+  expected_next_month_income: number | null;
+  cash_left_after_predicted_expenses: number | null;
+}
+
+export interface CategorySpend {
+  category: string;
+  amount: number;
+  transaction_count: number;
+}
+
+export interface MerchantSpend {
+  merchant_name: string;
+  amount: number;
+  transaction_count: number;
+}
+
+export interface SpendingTrend {
+  month: string;
+  income: number;
+  spending: number;
+}
+
+export interface Insight {
+  title: string;
+  detail: string;
+  severity: string;
+}
+
+export interface RecurringExpense {
+  id: string | null;
+  merchant_name: string;
+  amount: number;
+  frequency: string;
+  next_expected_date: string | null;
+  category: string | null;
+  confidence_score: number;
+}
+
+export interface StatementAnomaly {
+  id: string | null;
+  transaction_id: string | null;
+  anomaly_type: string;
+  explanation: string;
+  severity: string;
+  user_status: string;
+  merchant_name: string | null;
+  amount: number | null;
+}
+
+export interface BudgetRecommendation {
+  category: string;
+  recommended_amount: number;
+  reasoning: string;
+  confidence_score: number;
+}
+
+export interface SmartBudget {
+  month: string;
+  income_estimate: number;
+  total_budget: number;
+  recommendations: BudgetRecommendation[];
+  warnings: string[];
+  explanation: string;
 }

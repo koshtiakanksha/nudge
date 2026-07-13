@@ -22,6 +22,10 @@ class Anomaly(Base):
 
     ai_context: Mapped[str | None] = mapped_column(Text, nullable=True)  # Claude's human-readable explanation
     user_marked_intentional: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    anomaly_type: Mapped[str] = mapped_column(String, default="unusual_amount")
+    explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    severity: Mapped[str] = mapped_column(String, default="low")
+    user_status: Mapped[str] = mapped_column(String, default="pending")
 
     notified: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

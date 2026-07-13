@@ -50,7 +50,7 @@ services:
       redis:
         condition: service_healthy
     command: >
-      sh -c "alembic upgrade 0001_initial && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
   celery_worker:
     build:

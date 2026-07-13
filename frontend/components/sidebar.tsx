@@ -12,15 +12,22 @@ import {
   MessageCircle,
   Settings,
   AlertTriangle,
+  Upload,
+  PieChart,
+  Repeat,
 } from "lucide-react";
 import { cn } from "@/lib/format";
 
 const NAV_ITEMS = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
+  { href: "/statements", label: "Statements", icon: Upload },
+  { href: "/analysis", label: "Analysis", icon: PieChart },
   { href: "/transactions", label: "Transactions", icon: Receipt },
   { href: "/budget", label: "Budget", icon: Wallet },
+  { href: "/smart-budget", label: "AI Budget Builder", icon: Wallet },
   { href: "/forecast", label: "Forecast", icon: TrendingUp },
   { href: "/anomalies", label: "Unusual Activity", icon: AlertTriangle },
+  { href: "/recurring", label: "Recurring Bills", icon: Repeat },
   { href: "/price-watch", label: "Price Watch", icon: Tag },
   { href: "/deals", label: "Local Deals", icon: MapPin },
   { href: "/chat", label: "Ask Nudge", icon: MessageCircle },

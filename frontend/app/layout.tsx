@@ -1,11 +1,6 @@
 import type { Metadata } from "next";
-import { Inter, Source_Serif_4, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/sidebar";
-
-const body = Inter({ subsets: ["latin"], variable: "--font-body" });
-const display = Source_Serif_4({ subsets: ["latin"], variable: "--font-display" });
-const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
   title: "Nudge — your personal finance copilot",
@@ -14,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${body.variable} ${display.variable} ${mono.variable}`}>
+    <html lang="en">
       <body className="font-body bg-paper text-ink min-h-screen">
         <div className="flex min-h-screen">
           <Sidebar />

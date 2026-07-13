@@ -10,11 +10,12 @@ class ApiError extends Error {
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = typeof window !== "undefined" ? localStorage.getItem("nudge_token") : null;
+  const isForm = typeof FormData !== "undefined" && options.body instanceof FormData;
 
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
-      "Content-Type": "application/json",
+      ...(isForm ? {} : { "Content-Type": "application/json" }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
@@ -59,6 +60,52 @@ export const api = {
   updateTransaction: (id: string, payload: { nudge_category?: string; is_non_negotiable?: boolean }) =>
     request<import("@/types/api").Transaction>(`/transactions/${id}`, {
       method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  updateStatementTransaction: (id: string, payload: Partial<import("@/types/api").StatementTransaction> & { nudge_category?: string; apply_to_similar?: boolean }) =>
+    request<import("@/types/api").StatementTransaction>(`/transactions/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  bulkUpdateTransactions: (payload: { transaction_ids: string[]; nudge_category?: string; is_ignored?: boolean; is_recurring?: boolean; apply_to_similar?: boolean }) =>
+    request<{ updated: number }>("/transactions/bulk-update", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  // Statement analyzer
+  uploadStatement: (formData: FormData) =>
+    request<import("@/types/api").StatementUploadResponse>("/statements/upload", {
+      method: "POST",
+      body: formData,
+    }),
+  listStatements: () => request<import("@/types/api").StatementUpload[]>("/statements"),
+  getStatement: (id: string) => request<import("@/types/api").StatementUpload>(`/statements/${id}`),
+  deleteStatement: (id: string) => request<{ deleted: boolean }>(`/statements/${id}`, { method: "DELETE" }),
+  listStatementTransactions: (id: string) =>
+    request<import("@/types/api").StatementTransaction[]>(`/statements/${id}/transactions`),
+  saveReviewedStatements: () => request<{ reviewed_statements: number }>("/statements/review/save", { method: "POST" }),
+  getSpendingSummary: () => request<import("@/types/api").SpendingSummary>("/spending/summary"),
+  getSpendingCategories: () => request<import("@/types/api").CategorySpend[]>("/spending/categories"),
+  getSpendingMerchants: () => request<import("@/types/api").MerchantSpend[]>("/spending/merchants"),
+  getSpendingTrends: () => request<import("@/types/api").SpendingTrend[]>("/spending/trends"),
+  getInsights: () => request<import("@/types/api").Insight[]>("/insights"),
+  getStatementAnomalies: () => request<import("@/types/api").StatementAnomaly[]>("/statement-anomalies"),
+  updateStatementAnomaly: (id: string, userStatus: string) =>
+    request<import("@/types/api").StatementAnomaly>(`/statement-anomalies/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ user_status: userStatus }),
+    }),
+  getRecurringExpenses: () => request<import("@/types/api").RecurringExpense[]>("/recurring-expenses"),
+  generateBudgetFromHistory: () => request<import("@/types/api").SmartBudget>("/budget/generate-from-history", { method: "POST" }),
+  saveGeneratedBudget: (payload: {
+    month: string;
+    income_estimate?: number | null;
+    total_budget?: number | null;
+    recommendations: import("@/types/api").BudgetRecommendation[];
+  }) =>
+    request<{ id: string; saved: boolean }>("/budget/save", {
+      method: "POST",
       body: JSON.stringify(payload),
     }),
 

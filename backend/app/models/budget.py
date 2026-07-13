@@ -22,8 +22,11 @@ class Budget(Base):
 
     buffer_reserved: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
     total_allocated: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
+    income_estimate: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    total_budget: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
 
     generated_by_ai: Mapped[bool] = mapped_column(Boolean, default=True)
+    generated_from_statement: Mapped[bool] = mapped_column(Boolean, default=False)
     ai_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

@@ -3,18 +3,24 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, Check, X, ScanSearch } from "lucide-react";
 import { api } from "@/lib/api";
-import { Anomaly } from "@/types/api";
+import { Anomaly, StatementAnomaly } from "@/types/api";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Card } from "@/components/card";
 import { PageHeader } from "@/components/page-header";
 
 export default function AnomaliesPage() {
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
+  const [statementAnomalies, setStatementAnomalies] = useState<StatementAnomaly[]>([]);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
 
   const load = () => {
-    api.listAnomalies().then(setAnomalies).finally(() => setLoading(false));
+    Promise.all([api.listAnomalies(), api.getStatementAnomalies()])
+      .then(([scanItems, statementItems]) => {
+        setAnomalies(scanItems);
+        setStatementAnomalies(statementItems);
+      })
+      .finally(() => setLoading(false));
   };
   useEffect(() => {
     load();
@@ -30,6 +36,11 @@ export default function AnomaliesPage() {
   const handleFeedback = async (id: string, intentional: boolean) => {
     const updated = await api.submitAnomalyFeedback(id, intentional);
     setAnomalies((prev) => prev.map((a) => (a.id === id ? updated : a)));
+  };
+
+  const handleStatementStatus = async (id: string, status: string) => {
+    const updated = await api.updateStatementAnomaly(id, status);
+    setStatementAnomalies((prev) => prev.map((a) => (a.id === id ? updated : a)));
   };
 
   return (
@@ -48,12 +59,43 @@ export default function AnomaliesPage() {
 
         {loading ? (
           <p className="text-sm text-slate">Loading…</p>
-        ) : anomalies.length === 0 ? (
+        ) : anomalies.length === 0 && statementAnomalies.length === 0 ? (
           <Card>
-            <p className="text-sm text-slate">No unusual activity flagged. Run a scan after syncing transactions.</p>
+            <p className="text-sm text-slate">No anomalies detected. Upload statements or run a scan after syncing transactions.</p>
           </Card>
         ) : (
           <div className="space-y-3">
+            {statementAnomalies.map((a, i) => (
+              <Card key={a.id || `${a.anomaly_type}-${i}`} className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <AlertTriangle size={15} className="text-gold" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between gap-3">
+                    <p className="text-sm font-medium">
+                      {a.anomaly_type === "possible_travel" ? "Possible travel spending detected" : a.merchant_name || "Unusual transaction"}
+                    </p>
+                    {a.amount !== null && <span className="font-mono text-sm">{formatCurrency(a.amount)}</span>}
+                  </div>
+                  <p className="text-sm text-ink mt-2 leading-relaxed">{a.explanation}</p>
+                  {a.user_status === "pending" && a.id ? (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      <button onClick={() => handleStatementStatus(a.id!, "confirmed")} className="flex items-center gap-1 px-3 py-1.5 text-xs border border-line rounded-md hover:bg-moss/10">
+                        <Check size={13} /> {a.anomaly_type === "possible_travel" ? "Yes, mark as travel" : "Confirm"}
+                      </button>
+                      <button onClick={() => handleStatementStatus(a.id!, "dismissed")} className="flex items-center gap-1 px-3 py-1.5 text-xs border border-line rounded-md hover:bg-line/40">
+                        <X size={13} /> Dismiss
+                      </button>
+                      <button onClick={() => handleStatementStatus(a.id!, "ignored")} className="px-3 py-1.5 text-xs border border-line rounded-md hover:bg-line/40">
+                        Ignore suggestion
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate mt-2">Marked as {a.user_status}</p>
+                  )}
+                </div>
+              </Card>
+            ))}
             {anomalies.map((a) => (
               <Card key={a.id} className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-full bg-clay/10 flex items-center justify-center shrink-0 mt-0.5">

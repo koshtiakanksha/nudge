@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     debug: bool = True
     secret_key: str = "dev-secret-change-me"
     api_v1_prefix: str = "/api/v1"
-    allowed_origins: str = "http://localhost:3000"
+    allowed_origins: str = "http://localhost:3000,http://localhost:3001,http://localhost:3002,http://127.0.0.1:3000,http://127.0.0.1:3001,http://127.0.0.1:3002"
 
     # Supabase / DB
     supabase_url: str = ""
