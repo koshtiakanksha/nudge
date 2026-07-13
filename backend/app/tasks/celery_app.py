@@ -25,10 +25,9 @@ celery_app.conf.update(
             "task": "app.tasks.ai_tasks.scan_all_users_for_anomalies",
             "schedule": crontab(hour=4, minute=0),
         },
-        "price-watch-refresh": {
-            "task": "app.tasks.ai_tasks.refresh_all_price_watches",
-            "schedule": crontab(hour="*/6", minute=0),  # every 6 hours
-        },
+        # price-watch-refresh intentionally removed -- feature cut per the
+        # refocus roadmap. Was polling external price APIs on a schedule
+        # for a route that's no longer registered.
         "weekly-pulse-email": {
             "task": "app.tasks.notification_tasks.send_weekly_pulse_emails",
             "schedule": crontab(day_of_week=1, hour=8, minute=0),  # Monday 8am UTC

@@ -36,7 +36,7 @@ async def _send_weekly_pulse_emails():
             subject = "Your weekly Nudge pulse"
             body = (
                 f"Hi! You've spent ${mtd_spend:.2f} so far this month. "
-                f"Log in to Nudge to see your full breakdown, forecast, and any deals nearby."
+                f"Log in to Nudge to see your full breakdown and forecast."
             )
             _dispatch_email(user.email, subject, body)
             sent += 1

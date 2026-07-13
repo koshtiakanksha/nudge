@@ -1,15 +1,35 @@
-# Nudge — Personal Finance Copilot
+# Nudge — Explainable Financial Early-Warning System
 
-Nudge links to your bank accounts, builds an AI-generated monthly budget around how you actually spend, forecasts where you'll land by month-end, flags transactions that look out of place, watches product prices so you don't overpay, and surfaces local deals — all from one dashboard, with a conversational assistant on top.
+Nudge forecasts where your spending will land by month-end, catches
+changes in your habits before they become a problem, explains what's
+driving the risk, and recommends a concrete action — then tracks whether
+you took it and whether it helped.
 
-This repo is a full-stack monorepo: a FastAPI backend and a Next.js frontend, built to run locally with **zero API keys** (every external integration has a realistic mock fallback) and to deploy cleanly once you add real credentials.
+This repo is a full-stack monorepo: a FastAPI backend and a Next.js
+frontend, built to run locally with **zero API keys** (every external
+integration has a realistic mock fallback) and to deploy cleanly once you
+add real credentials.
+
+> **Scope note:** price-tracking and local-deals were part of an earlier,
+> broader version of this project. They're cut from the active product —
+> code still exists (`app/api/price_watches.py`, `app/api/deals.py`,
+> `frontend/app/price-watch/`, `frontend/app/deals/`) but isn't registered
+> in the API router or linked in navigation. The product is deliberately
+> narrower now: forecasting, anomaly/risk detection, budgeting, and a
+> grounded chat interface into all three.
 
 ## How mock mode works
 
-Every external dependency — Plaid, Anthropic Claude, Supabase, Google Places, Yelp, Eventbrite, CamelCamelCamel, SendGrid — is wrapped in a service class that checks whether its API key is set. If not, it returns deterministic, realistic mock data instead of failing. This means:
+Every external dependency — Plaid, Anthropic Claude, Supabase, SendGrid —
+is wrapped in a service class that checks whether its API key is set. If
+not, it returns deterministic, realistic mock data instead of failing.
+This means:
 
-- You can clone this repo, run `docker-compose up`, and have a fully working app with synthetic transactions, an AI-sounding budget, a price-watch verdict, and a local deals feed, before you've signed up for anything.
-- As you get real API keys, drop them into `backend/.env` and each feature individually switches from mock to live — no code changes needed.
+- You can clone this repo, run `docker-compose up`, and have a fully
+  working app with synthetic transactions, a forecast, anomaly alerts,
+  and an AI-sounding budget, before you've signed up for anything.
+- As you get real API keys, drop them into `backend/.env` and each
+  feature individually switches from mock to live — no code changes needed.
 - `GET /health` tells you which integrations are currently mocked.
 
 ## Architecture
@@ -23,12 +43,12 @@ nudge/
 │   │   ├── db/                 SQLAlchemy async engine/session
 │   │   ├── models/             SQLAlchemy ORM models
 │   │   ├── schemas/             Pydantic request/response schemas
-│   │   ├── services/            External integrations (Plaid, Claude, price intel, deals)
-│   │   ├── ml/                  Prophet forecasting, Isolation Forest anomaly detection
+│   │   ├── services/            External integrations (Plaid, Claude)
+│   │   ├── ml/                  Prophet forecasting, Isolation Forest anomaly detection, evaluation/ harnesses
 │   │   ├── tasks/               Celery app + background jobs (sync, scans, emails)
 │   │   └── main.py               App entrypoint
 │   ├── migrations/             Alembic migrations (incl. TimescaleDB hypertable setup)
-│   ├── scripts/                 Dev helpers: gen_key.py, seed_dev_data.py
+│   ├── scripts/                 Dev helpers: gen_key.py, seed_dev_data.py, run_*_evaluation.py
 │   ├── tests/                   Pytest suite
 │   ├── requirements.txt
 │   ├── Dockerfile / Dockerfile.worker

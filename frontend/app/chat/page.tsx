@@ -45,7 +45,7 @@ export default function ChatPage() {
     "Can I afford a $90 dress?",
     "Can I go out tonight?",
     "What can I cut this week?",
-    "Find me dinner deals under $12.",
+    "Why is my forecast up this month?",
   ];
 
   return (

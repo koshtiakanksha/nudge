@@ -66,7 +66,7 @@ export default function TodayPage() {
               <p className="text-lg font-medium">{today.recommended_action}</p>
               <div className="flex flex-wrap gap-3 mt-4">
                 <Link href="/budget" className="px-3 py-2 border border-line rounded-md text-sm hover:bg-line/40">View budget</Link>
-                <Link href="/deals" className="px-3 py-2 border border-line rounded-md text-sm hover:bg-line/40">Find deals</Link>
+                <Link href="/forecast" className="px-3 py-2 border border-line rounded-md text-sm hover:bg-line/40">View forecast</Link>
                 <Link href="/chat" className="px-3 py-2 border border-line rounded-md text-sm hover:bg-line/40">Ask Nudge</Link>
               </div>
             </Card>

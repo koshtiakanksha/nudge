@@ -7,8 +7,8 @@ import {
   LayoutDashboard,
   Receipt,
   Wallet,
-  Tag,
-  MapPin,
+  TrendingUp,
+  AlertTriangle,
   MessageCircle,
   Settings,
   Repeat,
@@ -20,12 +20,12 @@ import { AppMode } from "@/types/api";
 
 const NAV_ITEMS = [
   { href: "/", label: "Today", icon: LayoutDashboard },
-  { href: "/afford", label: "Can I Afford This?", icon: ShoppingBag },
+  { href: "/forecast", label: "Forecast", icon: TrendingUp },
+  { href: "/anomalies", label: "Alerts", icon: AlertTriangle },
   { href: "/budget", label: "Budget", icon: Wallet },
+  { href: "/afford", label: "Can I Afford This?", icon: ShoppingBag },
   { href: "/transactions", label: "Transactions", icon: Receipt },
   { href: "/recurring", label: "Bills", icon: Repeat },
-  { href: "/price-watch", label: "Price Watch", icon: Tag },
-  { href: "/deals", label: "Deals", icon: MapPin },
   { href: "/chat", label: "Ask Nudge", icon: MessageCircle },
 ];
 

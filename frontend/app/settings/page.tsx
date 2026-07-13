@@ -39,15 +39,6 @@ export default function SettingsPage() {
     }
   };
 
-  const handleUseLocation = () => {
-    navigator.geolocation?.getCurrentPosition(async (pos) => {
-      const updated = await api.updateMe({
-        location_lat: pos.coords.latitude,
-        location_lng: pos.coords.longitude,
-      });
-      setProfile(updated);
-    });
-  };
 
   return (
     <>
@@ -91,23 +82,6 @@ export default function SettingsPage() {
             />
             <span className="text-sm text-slate">%</span>
           </div>
-        </Card>
-
-        <Card>
-          <CardLabel>Location</CardLabel>
-          <p className="text-xs text-slate mb-2">Used to find nearby deals and events.</p>
-          {profile?.location_lat ? (
-            <p className="text-sm">
-              {profile.location_lat.toFixed(3)}, {profile.location_lng?.toFixed(3)}
-            </p>
-          ) : (
-            <button
-              onClick={handleUseLocation}
-              className="text-sm text-moss hover:underline"
-            >
-              Use my current location
-            </button>
-          )}
         </Card>
 
         <div className="flex items-center gap-3">
