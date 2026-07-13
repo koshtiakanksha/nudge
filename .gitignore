@@ -1,0 +1,35 @@
+# environment variables / secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# Alembic / local DB stuff
+*.sqlite
+*.db
+
+# Node / frontend
+node_modules/
+dist/
+build/
+.next/
+.vite/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Docker/local logs
+*.log
