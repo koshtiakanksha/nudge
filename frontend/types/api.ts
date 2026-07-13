@@ -33,9 +33,15 @@ export interface BudgetAllocation {
   is_non_neg: boolean;
 }
 
+export interface BudgetCategory extends BudgetAllocation {
+  name: string;
+}
+
 export interface Budget {
   id: string;
   month: string;
+  monthly_income: number | null;
+  total_budget: number | null;
   allocations: Record<string, BudgetAllocation>;
   buffer_reserved: number;
   total_allocated: number;
@@ -85,22 +91,56 @@ export interface PriceWatch {
   product_url: string;
   product_name: string | null;
   retailer: string | null;
+  image_url: string | null;
   current_price: number | null;
   target_price: number | null;
-  price_history: { date: string; price: number }[];
+  price_history: PriceHistoryPoint[];
   verdict: "buy_now" | "wait" | "overpriced" | null;
+  verdict_reason: string | null;
   confidence: number | null;
 }
 
-export interface Deal {
+export interface PriceHistoryPoint {
+  date: string;
+  price: number;
+}
+
+export interface ProductDeal {
   title: string;
   description: string;
   category: string;
+  result_type: "deal" | "product" | "place" | "event" | string;
   location: string | null;
+  address: string | null;
   distance_miles: number | null;
   source: string;
+  provider: string | null;
+  image_url: string | null;
+  price: number | null;
+  cost: string | null;
+  rating: number | null;
   url: string | null;
+  external_url: string | null;
+  website_url: string | null;
+  ticket_url: string | null;
+  directions_url: string | null;
   expires_at: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  last_updated: string | null;
+  is_sample: boolean;
+}
+
+export type Deal = ProductDeal;
+
+export interface PlaceRecommendation extends ProductDeal {
+  result_type: "place";
+}
+
+export interface EventRecommendation extends ProductDeal {
+  result_type: "event";
 }
 
 export interface ChatMessage {

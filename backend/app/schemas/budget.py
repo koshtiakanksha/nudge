@@ -10,11 +10,20 @@ class BudgetAllocation(BaseModel):
     is_non_neg: bool = False
 
 
+class BudgetCategoryInput(BaseModel):
+    name: str
+    allocated: float = 0
+    spent: float = 0
+    is_non_neg: bool = False
+
+
 class BudgetOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     month: date
+    monthly_income: float | None = None
+    total_budget: float | None = None
     allocations: dict[str, BudgetAllocation]
     buffer_reserved: float
     total_allocated: float
@@ -30,3 +39,11 @@ class BudgetGenerateRequest(BaseModel):
 class BudgetAdjustRequest(BaseModel):
     category: str
     new_allocated: float
+
+
+class BudgetSaveRequest(BaseModel):
+    month: date | None = None
+    monthly_income: float | None = None
+    total_budget: float | None = None
+    categories: list[BudgetCategoryInput]
+    ai_reasoning: str | None = None

@@ -36,9 +36,9 @@ export default function TransactionsPage() {
 
   const handleLink = async () => {
     const { mock_mode } = await api.createLinkToken();
-    // In production this opens Plaid Link UI; in mock mode we simulate the
+    // In production this opens Plaid Link UI; in local sample mode we simulate the
     // exchange directly since there's no real bank to connect to.
-    const item = await api.exchangeToken("mock-public-token", mock_mode ? "Mock Bank" : undefined);
+    const item = await api.exchangeToken("mock-public-token", mock_mode ? "Sample Bank" : undefined);
     setItems((prev) => [...prev, item]);
   };
 

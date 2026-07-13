@@ -59,10 +59,12 @@ class PriceWatchOut(BaseModel):
     product_url: str
     product_name: str | None
     retailer: str | None
+    image_url: str | None = None
     current_price: float | None
     target_price: float | None
     price_history: list[dict]
     verdict: str | None
+    verdict_reason: str | None = None
     confidence: float | None
 
 
@@ -71,11 +73,28 @@ class DealOut(BaseModel):
     title: str
     description: str
     category: str
+    result_type: str = "deal"
     location: str | None = None
+    address: str | None = None
     distance_miles: float | None = None
     source: str
+    provider: str | None = None
+    image_url: str | None = None
+    price: float | None = None
+    cost: str | None = None
+    rating: float | None = None
     url: str | None = None
+    external_url: str | None = None
+    website_url: str | None = None
+    ticket_url: str | None = None
+    directions_url: str | None = None
     expires_at: str | None = None
+    starts_at: str | None = None
+    ends_at: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    last_updated: str | None = None
+    is_sample: bool = False
 
 
 # --- Chat ---

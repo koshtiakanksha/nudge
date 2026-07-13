@@ -4,13 +4,14 @@ export function Card({
   children,
   className,
   padded = true,
+  ...props
 }: {
   children: React.ReactNode;
   className?: string;
   padded?: boolean;
-}) {
+} & React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("bg-white/60 border border-line rounded-lg", padded && "p-5", className)}>{children}</div>
+    <div className={cn("bg-white/60 border border-line rounded-lg", padded && "p-5", className)} {...props}>{children}</div>
   );
 }
 

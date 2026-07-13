@@ -21,7 +21,7 @@ async def create_price_watch(
     db: AsyncSession = Depends(get_db),
 ):
     price_info = await price_intel_service.fetch_current_price(payload.product_url)
-    history = price_intel_service.generate_price_history(payload.product_url, price_info["price"])
+    history = [{"date": str(__import__("datetime").date.today()), "price": price_info["price"]}]
     verdict_info = claude_service.price_verdict(price_info["product_name"], price_info["price"], history)
 
     watch = PriceWatch(
@@ -96,9 +96,11 @@ def _to_out(w: PriceWatch) -> PriceWatchOut:
         product_url=w.product_url,
         product_name=w.product_name,
         retailer=w.retailer,
+        image_url=None,
         current_price=float(w.current_price) if w.current_price is not None else None,
         target_price=float(w.target_price) if w.target_price is not None else None,
         price_history=w.price_history,
         verdict=w.verdict,
+        verdict_reason=None,
         confidence=float(w.confidence) if w.confidence is not None else None,
     )

@@ -69,6 +69,17 @@ export const api = {
       body: JSON.stringify({ regenerate }),
     }),
   getCurrentBudget: () => request<import("@/types/api").Budget>("/budgets/current"),
+  saveCurrentBudget: (payload: {
+    month?: string;
+    monthly_income?: number | null;
+    total_budget?: number | null;
+    categories: import("@/types/api").BudgetCategory[];
+    ai_reasoning?: string | null;
+  }) =>
+    request<import("@/types/api").Budget>("/budgets/current", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
   adjustBudget: (category: string, newAllocated: number) =>
     request<import("@/types/api").Budget>("/budgets/adjust", {
       method: "POST",

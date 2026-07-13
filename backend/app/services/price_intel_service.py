@@ -1,16 +1,13 @@
 """
 Price intelligence service.
 
-Real mode: uses CamelCamelCamel API (Amazon) where configured, otherwise
-falls back to a lightweight scraper (Playwright + BeautifulSoup) for basic
-"current price" extraction from a product page's meta tags.
-
-Mock mode (no API key, or scrape fails): generates a plausible synthetic
-price history so the price-watch feature is fully testable without any
-external dependency.
+Real mode uses configured integrations or a lightweight page scrape for basic
+"current price" extraction. Development fallback data is deterministic and
+API-shaped, but user-facing labels avoid exposing implementation mode.
 """
 import random
 import re
+from urllib.parse import urlparse
 from datetime import date, timedelta
 
 import httpx
@@ -23,13 +20,13 @@ class PriceIntelService:
         self.mock_mode = not settings.camel_configured
 
     async def fetch_current_price(self, product_url: str) -> dict:
-        """Returns {"price": float, "product_name": str, "retailer": str}"""
+        """Returns product fields suitable for a price-watch record."""
         if not self.mock_mode:
             try:
                 return await self._fetch_real(product_url)
             except Exception:
-                pass  # fall through to mock so the feature never hard-fails
-        return self._mock_price(product_url)
+                pass  # fall through to sample data so the feature never hard-fails
+        return self._sample_price(product_url)
 
     async def _fetch_real(self, product_url: str) -> dict:
         headers = {"User-Agent": settings.scraper_user_agent}
@@ -42,6 +39,7 @@ class PriceIntelService:
             r'content="USD ([\d.]+)"', html
         )
         name_match = re.search(r"<title>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
+        image_match = re.search(r'<meta property="og:image" content="([^"]+)"', html, re.IGNORECASE)
 
         price = float(price_match.group(1)) if price_match else None
         name = name_match.group(1).strip() if name_match else "Unknown product"
@@ -50,7 +48,7 @@ class PriceIntelService:
             raise ValueError("Could not extract price from page")
 
         retailer = self._guess_retailer(product_url)
-        return {"price": price, "product_name": name, "retailer": retailer}
+        return {"price": price, "product_name": name, "retailer": retailer, "image_url": image_match.group(1) if image_match else None}
 
     def _guess_retailer(self, url: str) -> str:
         for domain, label in [
@@ -61,17 +59,22 @@ class PriceIntelService:
                 return label
         return "Unknown"
 
-    def _mock_price(self, product_url: str) -> dict:
+    def _sample_price(self, product_url: str) -> dict:
         rng = random.Random(product_url)
         base_price = rng.uniform(20, 800)
+        parsed = urlparse(product_url)
+        slug = parsed.path.rstrip("/").split("/")[-1] or "tracked item"
+        clean_name = re.sub(r"[-_]+", " ", slug).strip()
+        clean_name = re.sub(r"\s+", " ", clean_name).title()[:80] or "Tracked Product"
         return {
             "price": round(base_price, 2),
-            "product_name": f"Mock Product ({product_url.split('/')[-1][:20] or 'item'})",
+            "product_name": clean_name,
             "retailer": self._guess_retailer(product_url),
+            "image_url": None,
         }
 
     def generate_price_history(self, product_url: str, current_price: float, days: int = 90) -> list[dict]:
-        """Mock historical series anchored around current_price, with a seasonal dip pattern."""
+        """Development sample history anchored around current_price, with a seasonal dip pattern."""
         rng = random.Random(product_url + "-history")
         history = []
         price = current_price * rng.uniform(1.05, 1.25)
