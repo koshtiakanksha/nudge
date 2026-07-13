@@ -31,6 +31,22 @@ def upgrade() -> None:
         "ALTER TABLE transactions ADD CONSTRAINT uq_transactions_plaid_id_date "
         "UNIQUE (plaid_transaction_id, date);"
     )
+
+    # The primary key on `id` alone hits the same rule and was missed
+    # originally -- create_hypertable() fails on it with "cannot create a
+    # unique index without the column date (used in partitioning)".
+    # anomalies.transaction_id has a single-column FK into transactions.id;
+    # a composite (id, date) primary key can no longer back that FK
+    # (Postgres requires the referenced columns to exactly match a unique
+    # constraint), so we drop it and rely on app-level integrity for that
+    # one relationship, same tradeoff Timescale docs recommend for
+    # hypertables referenced by other tables. Add an explicit index so we
+    # don't lose lookup performance on anomalies.transaction_id.
+    op.execute("ALTER TABLE anomalies DROP CONSTRAINT IF EXISTS anomalies_transaction_id_fkey;")
+    op.execute("ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_pkey;")
+    op.execute("ALTER TABLE transactions ADD CONSTRAINT transactions_pkey PRIMARY KEY (id, date);")
+    op.create_index("ix_anomalies_transaction_id", "anomalies", ["transaction_id"], if_not_exists=True)
+
     op.execute(
         "SELECT create_hypertable('transactions', 'date', "
         "chunk_time_interval => INTERVAL '1 month', if_not_exists => TRUE, migrate_data => TRUE);"
@@ -41,6 +57,13 @@ def downgrade() -> None:
     # Hypertables can't be cleanly "un-converted"; downgrading drops and
     # recreates the table as plain Postgres (data loss). Acceptable for a
     # dev-only downgrade path.
+    op.drop_index("ix_anomalies_transaction_id", table_name="anomalies", if_exists=True)
+    op.execute("ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_pkey;")
+    op.execute("ALTER TABLE transactions ADD CONSTRAINT transactions_pkey PRIMARY KEY (id);")
+    op.execute(
+        "ALTER TABLE anomalies ADD CONSTRAINT anomalies_transaction_id_fkey "
+        "FOREIGN KEY (transaction_id) REFERENCES transactions(id);"
+    )
     op.execute("ALTER TABLE transactions DROP CONSTRAINT IF EXISTS uq_transactions_plaid_id_date;")
     op.execute(
         "ALTER TABLE transactions ADD CONSTRAINT transactions_plaid_transaction_id_key "
