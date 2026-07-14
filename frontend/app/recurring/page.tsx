@@ -23,7 +23,7 @@ export default function RecurringPage() {
 
   return (
     <>
-      <PageHeader title="Recurring Expenses" subtitle="Subscriptions and bills detected from statement history" />
+      <PageHeader title="Recurring Expenses" subtitle="Subscriptions and bills detected from your transaction history" />
       <div className="px-8 py-6 max-w-4xl">
         {loading ? (
           <p className="text-sm text-slate">Looking for recurring expenses...</p>
@@ -32,7 +32,7 @@ export default function RecurringPage() {
         ) : items.length === 0 ? (
           <Card className="text-center py-10">
             <Repeat className="mx-auto text-slate mb-3" size={24} />
-            <p className="text-sm text-slate">No recurring expenses detected yet. Upload at least 2 to 3 months of statements for better detection.</p>
+            <p className="text-sm text-slate">No recurring expenses detected yet. Link a bank account or upload statements covering at least 2-3 months for better detection.</p>
           </Card>
         ) : (
           <Card padded={false}>

@@ -181,24 +181,34 @@ async def save_reviewed_transactions(current: CurrentUser = Depends(get_current_
     statements = result.scalars().all()
     for statement in statements:
         statement.status = "reviewed"
-    txns = await _all_statement_txns(db, current.id)
+    txns = await _all_user_transactions(db, current.id)
     await _persist_recurring_and_anomalies(db, current.id, txns)
     await db.commit()
     return {"reviewed_statements": len(statements)}
 
 
-async def _all_statement_txns(db: AsyncSession, user_id) -> list[Transaction]:
-    result = await db.execute(select(Transaction).where(Transaction.user_id == user_id, Transaction.statement_id.is_not(None)).order_by(Transaction.date.asc()))
+async def _all_user_transactions(db: AsyncSession, user_id) -> list[Transaction]:
+    """
+    All of a user's transactions, regardless of whether they came from a
+    Plaid sync or an uploaded statement. This used to filter to
+    statement_id IS NOT NULL only, which meant every endpoint using it
+    (recurring detection, spending summary, category/merchant totals,
+    trends, insights) was silently blind to any bank-linked data -- a
+    user who connected a bank and never uploaded a PDF statement would
+    see "no recurring expenses detected" regardless of how much real
+    transaction history existed.
+    """
+    result = await db.execute(select(Transaction).where(Transaction.user_id == user_id).order_by(Transaction.date.asc()))
     return result.scalars().all()
 
 
 @router.get("/spending/summary", response_model=SpendingSummaryOut)
 async def spending_summary(current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    txns = await _all_statement_txns(db, current.id)
+    txns = await _all_user_transactions(db, current.id)
     summary = analyzer["summarize_transactions"](txns)
     trends = analyzer["monthly_trends"](txns)
     if summary["months_of_history"] < 2:
-        summary["prediction_message"] = "Not enough history yet. Upload at least 2 to 3 months of statements for better predictions."
+        summary["prediction_message"] = "Not enough history yet. Link a bank account or upload statements covering at least 2-3 months for better predictions."
     else:
         recent = trends[-3:]
         weights = [1, 2, 3][-len(recent):]
@@ -211,22 +221,22 @@ async def spending_summary(current: CurrentUser = Depends(get_current_user), db:
 
 @router.get("/spending/categories")
 async def spending_categories(current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    return analyzer["category_totals"](await _all_statement_txns(db, current.id))
+    return analyzer["category_totals"](await _all_user_transactions(db, current.id))
 
 
 @router.get("/spending/merchants")
 async def spending_merchants(current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    return analyzer["merchant_totals"](await _all_statement_txns(db, current.id))
+    return analyzer["merchant_totals"](await _all_user_transactions(db, current.id))
 
 
 @router.get("/spending/trends")
 async def spending_trends(current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    return analyzer["monthly_trends"](await _all_statement_txns(db, current.id))
+    return analyzer["monthly_trends"](await _all_user_transactions(db, current.id))
 
 
 @router.get("/insights")
 async def insights(current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    return analyzer["insights"](await _all_statement_txns(db, current.id))
+    return analyzer["insights"](await _all_user_transactions(db, current.id))
 
 
 @router.get("/recurring-expenses", response_model=list[RecurringExpenseOut])
@@ -235,7 +245,7 @@ async def recurring_expenses(current: CurrentUser = Depends(get_current_user), d
     persisted = result.scalars().all()
     if persisted:
         return persisted
-    return analyzer["detect_recurring"](await _all_statement_txns(db, current.id))
+    return analyzer["detect_recurring"](await _all_user_transactions(db, current.id))
 
 
 @router.get("/statement-anomalies", response_model=list[StatementAnomalyOut])
@@ -273,7 +283,7 @@ async def update_statement_anomaly(anomaly_id: uuid.UUID, payload: AnomalyStatus
 async def generate_budget_from_history(current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     today = date.today()
     target_month = (today.replace(day=1))
-    result = analyzer["budget_recommendations"](await _all_statement_txns(db, current.id), target_month)
+    result = analyzer["budget_recommendations"](await _all_user_transactions(db, current.id), target_month)
     await db.execute(delete(BudgetRecommendation).where(BudgetRecommendation.user_id == current.id, BudgetRecommendation.month == target_month))
     for rec in result["recommendations"]:
         db.add(BudgetRecommendation(user_id=current.id, month=target_month, category=rec["category"], recommended_amount=rec["recommended_amount"], reasoning=rec["reasoning"], confidence_score=rec["confidence_score"]))

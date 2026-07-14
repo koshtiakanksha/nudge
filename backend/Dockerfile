@@ -13,11 +13,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Optional: pre-install Prophet's cmdstan backend at build time so real
-# Prophet forecasting is available immediately rather than falling back to
-# the moving-average projection. This adds several minutes to the build.
-# Uncomment to enable:
-# RUN python -c "import cmdstanpy; cmdstanpy.install_cmdstan()"
+# Pre-install Prophet's cmdstan backend at build time so real Prophet
+# forecasting actually runs, instead of every request silently throwing
+# during model.fit() and falling back to the flat moving-average
+# projection. This adds several minutes to the build.
+RUN python -c "import cmdstanpy; cmdstanpy.install_cmdstan()"
 
 COPY . .
 

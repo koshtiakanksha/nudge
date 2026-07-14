@@ -18,6 +18,7 @@ class ForecastResponse(BaseModel):
     ceiling: float | None
     on_track: bool
     days_remaining: int
+    model_used: str = "unknown"  # "prophet" | "fallback_moving_average" | "none"
 
 
 # --- Dashboard ---

@@ -120,7 +120,7 @@ def run_forecast_benchmark(
         if include_prophet:
             try:
                 from app.ml.forecasting import _prophet_forecast
-                pf = _prophet_forecast(train, horizon, month_end_date=test["date"].max())
+                pf = _prophet_forecast(train, horizon, month_end_date=test["date"].max(), already_spent_this_month=0.0)
                 preds = np.array([p["predicted_spend"] for p in pf["points"]])[:horizon]
                 lower = np.array([p["lower_bound"] for p in pf["points"]])[:horizon]
                 upper = np.array([p["upper_bound"] for p in pf["points"]])[:horizon]

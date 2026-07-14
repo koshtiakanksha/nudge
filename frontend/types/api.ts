@@ -79,6 +79,7 @@ export interface ForecastResponse {
   ceiling: number | null;
   on_track: boolean;
   days_remaining: number;
+  model_used: string;
 }
 
 export interface DashboardSummary {

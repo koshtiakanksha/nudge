@@ -74,6 +74,13 @@ export default function ForecastPage() {
           </Card>
         </div>
 
+        {forecast.model_used === "fallback_moving_average" && (
+          <p className="text-xs text-slate bg-line/30 rounded-md px-3 py-2">
+            Using a simple average-based projection for this forecast (not the full model) —
+            typically because there's not yet enough history, or the primary model is unavailable.
+          </p>
+        )}
+
         <Card>
           <CardLabel>Next {forecast.days_remaining} days, projected daily spend</CardLabel>
           <div className="h-64 mt-3">
