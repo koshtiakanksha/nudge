@@ -38,6 +38,23 @@ def test_grounding_rewards_reasoning_that_cites_real_numbers():
     assert scores["reasoning_cites_real_numbers"] == 1.0
 
 
+def test_grounding_empty_allocation_against_true_cold_start_is_correct():
+    # No historical data, no non-negotiables -- empty allocations here is
+    # the honest answer, not a failure. This was the bug: the old mock
+    # used to hallucinate a fallback category set in exactly this case.
+    result = {"allocations": {}, "reasoning": "No spending history yet."}
+    scores = _score_grounding(result, spendable=4250, buffer_reserved=750,
+                               spending_by_category={}, non_negotiables=[])
+    assert scores["category_grounding"] == 1.0
+
+
+def test_grounding_empty_allocation_when_data_existed_is_a_failure():
+    result = {"allocations": {}, "reasoning": ""}
+    scores = _score_grounding(result, spendable=150, buffer_reserved=50,
+                               spending_by_category={"Groceries": 300}, non_negotiables=[])
+    assert scores["category_grounding"] == 0.0
+
+
 def test_agreement_needs_at_least_two_shared_categories():
     result = {"allocations": {"Groceries": {"allocated": 100}}}
     assert _score_agreement(result, {"Groceries": 300}) is None

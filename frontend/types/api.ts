@@ -44,6 +44,13 @@ export interface BudgetCategory extends BudgetAllocation {
   name: string;
 }
 
+export interface BudgetChange {
+  category: string;
+  previous_amount: number;
+  current_amount: number;
+  delta: number;
+}
+
 export interface Budget {
   id: string;
   month: string;
@@ -54,6 +61,9 @@ export interface Budget {
   total_allocated: number;
   generated_by_ai: boolean;
   ai_reasoning: string | null;
+  engine_version: string | null;
+  prompt_version: string | null;
+  changes_from_previous: BudgetChange[];
 }
 
 export interface ForecastPoint {

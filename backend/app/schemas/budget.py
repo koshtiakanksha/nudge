@@ -17,6 +17,13 @@ class BudgetCategoryInput(BaseModel):
     is_non_neg: bool = False
 
 
+class BudgetChange(BaseModel):
+    category: str
+    previous_amount: float
+    current_amount: float
+    delta: float
+
+
 class BudgetOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -29,6 +36,9 @@ class BudgetOut(BaseModel):
     total_allocated: float
     generated_by_ai: bool
     ai_reasoning: str | None
+    engine_version: str | None = None
+    prompt_version: str | None = None
+    changes_from_previous: list[BudgetChange] = []
 
 
 class BudgetGenerateRequest(BaseModel):

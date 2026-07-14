@@ -11,6 +11,7 @@ from app.models.budget import Budget
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.budget import BudgetAdjustRequest, BudgetGenerateRequest, BudgetOut, BudgetSaveRequest
+from app.services.budget_engine import diff_allocations
 from app.services.claude_service import claude_service
 
 router = APIRouter(prefix="/budgets", tags=["budgets"])
@@ -18,6 +19,15 @@ router = APIRouter(prefix="/budgets", tags=["budgets"])
 
 def _month_start(d: date) -> date:
     return d.replace(day=1)
+
+
+async def _previous_month_allocations(db: AsyncSession, user_id, month: date) -> dict | None:
+    prev_month = month - relativedelta(months=1)
+    result = await db.execute(
+        select(Budget).where(Budget.user_id == user_id, Budget.month == prev_month)
+    )
+    prev = result.scalar_one_or_none()
+    return prev.allocations if prev else None
 
 
 async def _historical_spend_by_category(db: AsyncSession, user_id, months: int = 3) -> dict[str, float]:
@@ -107,6 +117,7 @@ async def generate_budget(
 
     spending_history = await _historical_spend_by_category(db, current.id)
     non_negotiables = [cat for cat in spending_history if cat in {"Rent", "Utilities", "Utilities & Bills", "Health"}]
+    previous_allocations = await _previous_month_allocations(db, current.id, month)
 
     ai_result = claude_service.generate_budget(
         monthly_income=float(user.monthly_income),
@@ -114,6 +125,7 @@ async def generate_budget(
         buffer_pct=float(user.buffer_pct),
         spending_by_category=spending_history,
         non_negotiables=non_negotiables,
+        previous_allocations=previous_allocations,
     )
 
     total_allocated = sum(v["allocated"] for v in ai_result["allocations"].values())
@@ -123,6 +135,8 @@ async def generate_budget(
         existing.buffer_reserved = ai_result["buffer_reserved"]
         existing.total_allocated = total_allocated
         existing.ai_reasoning = ai_result["reasoning"]
+        existing.engine_version = ai_result["engine_version"]
+        existing.prompt_version = ai_result["prompt_version"]
         budget = existing
     else:
         budget = Budget(
@@ -133,6 +147,8 @@ async def generate_budget(
             total_allocated=total_allocated,
             generated_by_ai=True,
             ai_reasoning=ai_result["reasoning"],
+            engine_version=ai_result["engine_version"],
+            prompt_version=ai_result["prompt_version"],
         )
         db.add(budget)
 
@@ -250,6 +266,7 @@ async def adjust_budget(
 async def _to_budget_out(db: AsyncSession, budget: Budget) -> BudgetOut:
     user_result = await db.execute(select(User).where(User.id == budget.user_id))
     user = user_result.scalar_one_or_none()
+    previous_allocations = await _previous_month_allocations(db, budget.user_id, budget.month)
     return BudgetOut(
         id=budget.id,
         month=budget.month,
@@ -260,4 +277,7 @@ async def _to_budget_out(db: AsyncSession, budget: Budget) -> BudgetOut:
         total_allocated=float(budget.total_allocated),
         generated_by_ai=budget.generated_by_ai,
         ai_reasoning=budget.ai_reasoning,
+        engine_version=budget.engine_version,
+        prompt_version=budget.prompt_version,
+        changes_from_previous=diff_allocations(previous_allocations, budget.allocations),
     )

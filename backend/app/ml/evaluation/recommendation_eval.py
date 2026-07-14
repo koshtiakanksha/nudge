@@ -101,7 +101,14 @@ def _score_grounding(result: dict, spendable: float, buffer_reserved: float,
     allowed = set(spending_by_category.keys()) | set(non_negotiables)
 
     if not allocations:
-        category_grounding = 0.0
+        # Empty allocations is only a failure if there was something to
+        # allocate (historical categories or non-negotiables) that got
+        # dropped. Against a true cold-start input (no history, no
+        # non-negotiables), an empty result is the honest answer -- the
+        # old mock used to paper over this with a hallucinated fallback
+        # category set, which is the exact behavior this rubric exists
+        # to catch, not reward.
+        category_grounding = 1.0 if not allowed else 0.0
     else:
         hallucinated = [c for c in allocations if allowed and c not in allowed]
         category_grounding = 1.0 - (len(hallucinated) / len(allocations)) if allowed else 1.0

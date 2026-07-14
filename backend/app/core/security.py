@@ -13,8 +13,12 @@ from cryptography.fernet import Fernet
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.db.session import get_db
+from app.models.user import User
 
 security_scheme = HTTPBearer(auto_error=False)
 
@@ -57,13 +61,45 @@ class CurrentUser:
 
 DEV_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
+# Process-local cache of user ids we've already confirmed/created a row
+# for, so we're not running an INSERT ... ON CONFLICT on every single
+# authenticated request. Safe to lose on restart -- worst case we just
+# redo one no-op insert.
+_ensured_user_ids: set[uuid.UUID] = set()
+
+
+async def _ensure_user_row(db: AsyncSession, user_id: uuid.UUID, email: str | None) -> None:
+    """
+    Guarantees a `users` row exists for this id before the request
+    proceeds. Almost every endpoint in this codebase inserts rows that
+    foreign-key onto users.id (plaid_items, transactions, budgets, ...)
+    without checking the user row exists first -- only a couple of
+    endpoints defensively created it themselves. That meant any first
+    action other than visiting Settings (which happened to create it)
+    would 500 with a ForeignKeyViolationError. Fixing it once here, in
+    the dependency every authenticated route already goes through,
+    instead of patching each endpoint individually.
+    """
+    if user_id in _ensured_user_ids:
+        return
+    stmt = (
+        pg_insert(User)
+        .values(id=user_id, email=email or f"{user_id}@local.test")
+        .on_conflict_do_nothing(index_elements=["id"])
+    )
+    await db.execute(stmt)
+    await db.commit()
+    _ensured_user_ids.add(user_id)
+
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security_scheme),
+    db: AsyncSession = Depends(get_db),
 ) -> CurrentUser:
     # Mock mode: no Supabase JWT secret configured -> single dev user,
     # no token required. Lets the whole app run locally without Supabase.
     if not settings.supabase_jwt_secret:
+        await _ensure_user_row(db, DEV_USER_ID, "dev@local.test")
         return CurrentUser(id=DEV_USER_ID, email="dev@local.test")
 
     if credentials is None:
@@ -87,4 +123,6 @@ async def get_current_user(
     if not sub:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token missing subject")
 
-    return CurrentUser(id=uuid.UUID(sub), email=payload.get("email"))
+    user_id = uuid.UUID(sub)
+    await _ensure_user_row(db, user_id, payload.get("email"))
+    return CurrentUser(id=user_id, email=payload.get("email"))

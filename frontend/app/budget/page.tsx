@@ -404,6 +404,26 @@ export default function BudgetPage() {
               </div>
 
               <div className="space-y-5">
+                {budget?.ai_reasoning && (
+                  <Card>
+                    <CardLabel>Why this budget</CardLabel>
+                    <p className="text-sm text-ink leading-relaxed">{budget.ai_reasoning}</p>
+                    {budget.changes_from_previous && budget.changes_from_previous.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-line space-y-1.5">
+                        <p className="text-xs text-slate mb-2">Changed since last month</p>
+                        {budget.changes_from_previous.slice(0, 5).map((c) => (
+                          <div key={c.category} className="flex justify-between text-xs">
+                            <span className="text-ink">{c.category}</span>
+                            <span className={cn(c.delta > 0 ? "text-moss" : "text-clay")}>
+                              {c.delta > 0 ? "+" : ""}{formatCurrency(c.delta)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </Card>
+                )}
+
                 <Card className="sticky top-6">
                   <CardLabel>Updated totals</CardLabel>
                   <div className="space-y-3 text-sm">

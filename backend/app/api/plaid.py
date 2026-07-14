@@ -101,7 +101,7 @@ async def sync_item(
                 nudge_category=nudge_category,
                 account_id=t.get("account_id"),
             )
-            .on_conflict_do_nothing(index_elements=["plaid_transaction_id"])
+            .on_conflict_do_nothing(index_elements=["plaid_transaction_id", "date"])
         )
         res = await db.execute(stmt)
         if res.rowcount:

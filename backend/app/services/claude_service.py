@@ -12,6 +12,13 @@ mock logic so every feature still produces sensible output locally.
 import json
 
 from app.core.config import settings
+from app.services.budget_engine import (
+    compute_budget_allocation,
+    diff_allocations,
+    validate_allocation,
+)
+
+BUDGET_PROMPT_VERSION = "budget-explain-v1"
 
 NUDGE_CATEGORIES = [
     "Groceries",
@@ -79,61 +86,83 @@ class ClaudeService:
         buffer_pct: float,
         spending_by_category: dict[str, float],
         non_negotiables: list[str],
+        previous_allocations: dict[str, dict] | None = None,
     ) -> dict:
-        """Returns {"allocations": {...}, "buffer_reserved": float, "reasoning": str}"""
+        """
+        Returns {"allocations": {...}, "buffer_reserved": float,
+        "reasoning": str, "engine_version": str, "prompt_version": str,
+        "changes_from_previous": list[dict]}.
+
+        The dollar amounts in "allocations" come entirely from
+        app.services.budget_engine -- a deterministic function, no LLM
+        involved. Claude's only role is writing the "reasoning" prose
+        that explains a result it did not compute and cannot alter. This
+        replaced an earlier version where Claude generated the numbers
+        directly, which an evaluation harness found was only ~57%
+        consistent across repeated identical requests -- unacceptable
+        for a number someone might act on financially.
+        """
         ceiling = spend_ceiling or (monthly_income * (1 - buffer_pct))
         buffer_reserved = round(monthly_income * buffer_pct, 2)
         spendable = round(ceiling - buffer_reserved, 2) if ceiling else round(monthly_income - buffer_reserved, 2)
 
-        if self.mock_mode:
-            return self._mock_budget(spendable, buffer_reserved, spending_by_category, non_negotiables)
+        engine_result = compute_budget_allocation(spendable, buffer_reserved, spending_by_category, non_negotiables)
+        is_valid, issues = validate_allocation(engine_result.allocations, spendable, non_negotiables)
+        if not is_valid:
+            # A hard failure here means the deterministic engine itself
+            # produced something structurally wrong (e.g. over budget).
+            # That's a bug to fix in budget_engine.py, not something a
+            # retry against Claude papers over -- surfacing it loudly is
+            # the point of having validation at all.
+            raise ValueError(f"Budget engine produced an invalid allocation: {issues}")
 
-        prompt = f"""You are a personal budgeting assistant. Create a monthly budget.
-
-Monthly income: ${monthly_income:.2f}
-Spend ceiling: ${ceiling:.2f}
-Buffer to reserve: ${buffer_reserved:.2f} ({buffer_pct*100:.0f}%)
-Spendable amount: ${spendable:.2f}
-Historical spending by category (last 3 months avg): {json.dumps(spending_by_category)}
-Non-negotiable categories (must be fully funded first): {non_negotiables}
-
-Return ONLY valid JSON in this exact shape, no markdown fences, no commentary:
-{{"allocations": {{"<category>": {{"allocated": <number>, "is_non_neg": <bool>}}}}, "reasoning": "<2-3 sentence plain-English explanation of the allocation logic>"}}
-"""
-        response = self.client.messages.create(
-            model=self.model,
-            max_tokens=1024,
-            messages=[{"role": "user", "content": prompt}],
+        reasoning = self._explain_allocation(
+            engine_result, monthly_income, buffer_pct, non_negotiables,
         )
-        text = response.content[0].text.strip()
-        text = text.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-        try:
-            parsed = json.loads(text)
-        except json.JSONDecodeError:
-            return self._mock_budget(spendable, buffer_reserved, spending_by_category, non_negotiables)
 
         return {
-            "allocations": parsed.get("allocations", {}),
+            "allocations": engine_result.allocations,
             "buffer_reserved": buffer_reserved,
-            "reasoning": parsed.get("reasoning", ""),
+            "reasoning": reasoning,
+            "engine_version": engine_result.engine_version,
+            "prompt_version": BUDGET_PROMPT_VERSION,
+            "changes_from_previous": diff_allocations(previous_allocations, engine_result.allocations),
+            "validation_warnings": [i for i in issues if i.startswith("WARNING")],
         }
 
-    def _mock_budget(self, spendable, buffer_reserved, spending_by_category, non_negotiables) -> dict:
-        if not spending_by_category:
-            spending_by_category = {"Groceries": 400, "Dining": 250, "Transportation": 150,
-                                      "Entertainment": 100, "Shopping": 200}
-        total_historical = sum(spending_by_category.values()) or 1
-        allocations = {}
-        for cat, hist_amount in spending_by_category.items():
-            share = hist_amount / total_historical
-            allocated = round(spendable * share, 2)
-            allocations[cat] = {"allocated": allocated, "spent": 0, "is_non_neg": cat in non_negotiables}
-        reasoning = (
-            f"Allocated ${spendable:.2f} proportionally based on your last 3 months of spending, "
-            f"after reserving ${buffer_reserved:.2f} as a safety buffer. "
-            f"Non-negotiable categories ({', '.join(non_negotiables) or 'none set'}) are protected first."
+    def _explain_allocation(self, engine_result, monthly_income, buffer_pct, non_negotiables) -> str:
+        """Prose-only explanation of an already-computed allocation. Never
+        asked to produce or alter any number."""
+        if self.mock_mode:
+            return self._mock_explain(engine_result, non_negotiables)
+
+        prompt = f"""The following monthly budget allocation has ALREADY been computed by a deterministic rules engine. Do not change, recompute, or restate any number differently than given -- your only job is a 2-3 sentence plain-English explanation of the logic, referencing the real figures below.
+
+Monthly income: ${monthly_income:.2f}
+Buffer reserved: ${engine_result.buffer_reserved:.2f} ({buffer_pct*100:.0f}% of income)
+Spendable amount: ${engine_result.spendable:.2f}
+Non-negotiable categories (funded first, from historical spend): {non_negotiables or 'none'}
+Computed allocation: {json.dumps(engine_result.allocations)}
+
+Respond with ONLY the explanation sentence(s). No JSON, no markdown, no restating the allocation as a list."""
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
         )
-        return {"allocations": allocations, "buffer_reserved": buffer_reserved, "reasoning": reasoning}
+        return response.content[0].text.strip()
+
+    def _mock_explain(self, engine_result, non_negotiables) -> str:
+        non_neg_text = ", ".join(non_negotiables) if non_negotiables else "none set"
+        note = ""
+        if engine_result.non_negotiables_constrained:
+            note = " Your non-negotiable categories alone exceed your spendable amount this month, so they were scaled down proportionally to fit -- worth reviewing your spend ceiling or income."
+        return (
+            f"Allocated ${engine_result.spendable:.2f} across your categories, after reserving "
+            f"${engine_result.buffer_reserved:.2f} as a safety buffer. Non-negotiable categories "
+            f"({non_neg_text}) were funded first from their historical spend, and the remainder "
+            f"was split proportionally across the rest based on your recent spending pattern.{note}"
+        )
 
     # -----------------------------------------------------------------
     def chat(self, user_message: str, context: dict, history: list[dict]) -> dict:

@@ -28,6 +28,8 @@ class Budget(Base):
     generated_by_ai: Mapped[bool] = mapped_column(Boolean, default=True)
     generated_from_statement: Mapped[bool] = mapped_column(Boolean, default=False)
     ai_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    engine_version: Mapped[str | None] = mapped_column(Text, nullable=True)
+    prompt_version: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

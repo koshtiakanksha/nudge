@@ -19,6 +19,8 @@ export default function TransactionsPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [linking, setLinking] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -26,6 +28,10 @@ export default function TransactionsPage() {
       .then(([txnRes, itemsRes]) => {
         setTransactions(txnRes.items);
         setItems(itemsRes);
+      })
+      .catch((err) => {
+        console.error("Failed to load transactions/items:", err);
+        setLinkError(err instanceof Error ? err.message : "Failed to load your data. Check the console for details.");
       })
       .finally(() => setLoading(false));
   };
@@ -35,18 +41,34 @@ export default function TransactionsPage() {
   }, []);
 
   const handleLink = async () => {
-    const { mock_mode } = await api.createLinkToken();
-    // In production this opens Plaid Link UI; in local sample mode we simulate the
-    // exchange directly since there's no real bank to connect to.
-    const item = await api.exchangeToken("mock-public-token", mock_mode ? "Sample Bank" : undefined);
-    setItems((prev) => [...prev, item]);
+    setLinking(true);
+    setLinkError(null);
+    try {
+      const { mock_mode } = await api.createLinkToken();
+      // In production this opens Plaid Link UI; in local sample mode we simulate the
+      // exchange directly since there's no real bank to connect to.
+      const item = await api.exchangeToken("mock-public-token", mock_mode ? "Sample Bank" : undefined);
+      setItems((prev) => [...prev, item]);
+    } catch (err) {
+      console.error("Failed to link bank account:", err);
+      setLinkError(err instanceof Error ? err.message : "Failed to link account. Check the console for details.");
+    } finally {
+      setLinking(false);
+    }
   };
 
   const handleSync = async (itemId: string) => {
     setSyncing(true);
-    await api.syncItem(itemId);
-    load();
-    setSyncing(false);
+    setLinkError(null);
+    try {
+      await api.syncItem(itemId);
+      load();
+    } catch (err) {
+      console.error("Failed to sync:", err);
+      setLinkError(err instanceof Error ? err.message : "Sync failed. Check the console for details.");
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const handleCategoryChange = async (txnId: string, category: string) => {
@@ -64,9 +86,10 @@ export default function TransactionsPage() {
           {items.length === 0 ? (
             <button
               onClick={handleLink}
-              className="px-4 py-2 bg-moss text-paper rounded-md text-sm font-medium hover:bg-moss2 transition-colors"
+              disabled={linking}
+              className="px-4 py-2 bg-moss text-paper rounded-md text-sm font-medium hover:bg-moss2 transition-colors disabled:opacity-60"
             >
-              Link a bank account
+              {linking ? "Linking…" : "Link a bank account"}
             </button>
           ) : (
             items.map((item) => (
@@ -82,6 +105,12 @@ export default function TransactionsPage() {
             ))
           )}
         </div>
+
+        {linkError && (
+          <p className="mb-5 text-sm text-clay bg-clay/10 border border-clay/30 rounded-md px-3 py-2">
+            {linkError}
+          </p>
+        )}
 
         <Card padded={false} className="overflow-hidden">
           {loading ? (
