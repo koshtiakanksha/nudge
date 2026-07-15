@@ -82,17 +82,6 @@ export interface ForecastResponse {
   model_used: string;
 }
 
-export interface DashboardSummary {
-  month_to_date_spend: number;
-  month_to_date_income: number;
-  buffer_status: number;
-  top_categories: { category: string; amount: number }[];
-  spend_ceiling: number | null;
-  projected_month_end: number;
-  recent_anomalies: number;
-  active_price_watches: number;
-}
-
 export interface Anomaly {
   id: string;
   transaction_id: string;
@@ -172,6 +161,18 @@ export interface ChatMessage {
   actions?: { label: string; href: string }[];
   chart_data?: Record<string, unknown> | null;
   created_at?: string;
+}
+
+export interface DashboardSummary {
+  month_to_date_spend: number;
+  month_to_date_income: number;
+  buffer_status: number;
+  top_categories: { category: string; amount: number }[];
+  daily_trend: { date: string; amount: number }[];
+  spend_ceiling: number | null;
+  projected_month_end: number;
+  recent_anomalies: number;
+  active_price_watches: number;
 }
 
 export interface TodaySummary {

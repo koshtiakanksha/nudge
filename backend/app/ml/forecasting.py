@@ -27,7 +27,7 @@ def forecast_spend(
     {
       "points": [{"date": ..., "predicted_spend": ..., "lower_bound": ..., "upper_bound": ...}],
       "month_end_projection": float,
-      "model_used": "prophet" | "fallback_moving_average",
+      "model_used": "prophet" | "fallback_weekday_average",
     }
 
     daily_spend is the training history fed to the model -- this should be
@@ -98,23 +98,37 @@ def _prophet_forecast(df: pd.DataFrame, days_remaining: int, month_end_date: dat
 
 
 def _fallback_forecast(df: pd.DataFrame, days_remaining: int, month_end_date: date, already_spent_this_month: float) -> dict:
-    """Simple moving-average projection for cold-start users (<14 days history)
-    or when Prophet is unavailable."""
-    avg_daily = df["amount"].mean() if len(df) else 0.0
-    std_daily = df["amount"].std() if len(df) > 1 else avg_daily * 0.3
+    """
+    Weekday-aware average projection -- used for cold-start users (<14 days
+    history) or when Prophet is unavailable. This is deliberately not just
+    a flat daily mean: a flat projection draws as a dead straight line and
+    ignores the weekday/weekend pattern almost every household actually
+    has. Averaging per day-of-week (same idea as the seasonal_naive
+    baseline in app/ml/evaluation/forecast_models.py) gives a fallback
+    that still looks like a real forecast instead of an obviously-broken one.
+    """
+    if not len(df):
+        return {"points": [], "month_end_projection": round(already_spent_this_month, 2), "model_used": "none"}
 
-    last_date = df["date"].max().date() if len(df) else month_end_date
+    df = df.copy()
+    df["dow"] = df["date"].dt.dayofweek
+    dow_avg = df.groupby("dow")["amount"].mean()
+    overall_avg = df["amount"].mean()
+    overall_std = df["amount"].std() if len(df) > 1 else overall_avg * 0.3
+
+    last_date = df["date"].max().date()
     points = []
     for i in range(1, days_remaining + 1):
         d = last_date + timedelta(days=i)
         if d > month_end_date:
             break
+        predicted = dow_avg.get(d.weekday(), overall_avg)
         points.append(
             {
                 "date": d,
-                "predicted_spend": round(max(0.0, avg_daily), 2),
-                "lower_bound": round(max(0.0, avg_daily - std_daily), 2),
-                "upper_bound": round(avg_daily + std_daily, 2),
+                "predicted_spend": round(max(0.0, predicted), 2),
+                "lower_bound": round(max(0.0, predicted - overall_std), 2),
+                "upper_bound": round(predicted + overall_std, 2),
             }
         )
 
@@ -123,5 +137,5 @@ def _fallback_forecast(df: pd.DataFrame, days_remaining: int, month_end_date: da
     return {
         "points": points,
         "month_end_projection": round(already_spent_this_month + projected_remaining, 2),
-        "model_used": "fallback_moving_average",
+        "model_used": "fallback_weekday_average",
     }

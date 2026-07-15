@@ -3,14 +3,18 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AlertTriangle, ArrowRight, CheckCircle2, Receipt, Wallet } from "lucide-react";
+import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "@/lib/api";
-import { TodaySummary } from "@/types/api";
+import { TodaySummary, DashboardSummary } from "@/types/api";
 import { formatCurrency } from "@/lib/format";
 import { Card, CardLabel } from "@/components/card";
 import { PageHeader } from "@/components/page-header";
 
+const CATEGORY_COLORS = ["#2F5D50", "#C1622D", "#B8923F", "#4A7A8C", "#5B6760"];
+
 export default function TodayPage() {
   const [today, setToday] = useState<TodaySummary | null>(null);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,6 +24,7 @@ export default function TodayPage() {
       .then(setToday)
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load Today"))
       .finally(() => setLoading(false));
+    api.getDashboardSummary().then(setSummary).catch(() => {});
   }, []);
 
   return (
@@ -83,6 +88,60 @@ export default function TodayPage() {
                 <Link href="/chat" className="px-3 py-2 border border-line rounded-md text-sm hover:bg-line/40">Ask Nudge</Link>
               </div>
             </Card>
+
+            {summary && summary.top_categories.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <Card>
+                  <CardLabel>Spending by category this month</CardLabel>
+                  <div className="h-56 mt-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={summary.top_categories}
+                          dataKey="amount"
+                          nameKey="category"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={45}
+                          outerRadius={80}
+                          paddingAngle={2}
+                        >
+                          {summary.top_categories.map((_, i) => (
+                            <Cell key={i} fill={CATEGORY_COLORS[i % CATEGORY_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-2">
+                    {summary.top_categories.map((c, i) => (
+                      <div key={c.category} className="flex items-center gap-1.5 text-xs text-slate">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[i % CATEGORY_COLORS.length] }} />
+                        {c.category} · {formatCurrency(c.amount)}
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+
+                {summary.daily_trend.length > 0 && (
+                  <Card>
+                    <CardLabel>Daily spend, last 30 days</CardLabel>
+                    <div className="h-56 mt-2">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={summary.daily_trend}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#DDD6C5" vertical={false} />
+                          <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(d) => d.slice(5)} />
+                          <YAxis tick={{ fontSize: 11 }} />
+                          <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                          <Bar dataKey="amount" fill="#2F5D50" radius={[3, 3, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </Card>
+                )}
+              </div>
+            )}
           </>
         ) : null}
       </div>

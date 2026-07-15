@@ -18,7 +18,7 @@ class ForecastResponse(BaseModel):
     ceiling: float | None
     on_track: bool
     days_remaining: int
-    model_used: str = "unknown"  # "prophet" | "fallback_moving_average" | "none"
+    model_used: str = "unknown"  # "prophet" | "fallback_weekday_average" | "none"
 
 
 # --- Dashboard ---
@@ -27,6 +27,7 @@ class DashboardSummary(BaseModel):
     month_to_date_income: float
     buffer_status: float  # 0-1, pct of buffer remaining
     top_categories: list[dict]
+    daily_trend: list[dict]  # [{"date": "...", "amount": float}] last 30 days
     spend_ceiling: float | None
     projected_month_end: float
     recent_anomalies: int
