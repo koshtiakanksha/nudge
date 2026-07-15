@@ -96,6 +96,7 @@ export interface DashboardSummary {
 export interface Anomaly {
   id: string;
   transaction_id: string;
+  transaction_date: string | null;
   merchant_name: string | null;
   amount: number;
   anomaly_score: number;
@@ -177,6 +178,7 @@ export interface TodaySummary {
   safe_to_spend_today: number;
   safe_to_spend_message: string;
   can_calculate: boolean;
+  has_linked_data: boolean;
   month_to_date_spending: number;
   month_end_forecast: number;
   spending_ceiling: number | null;

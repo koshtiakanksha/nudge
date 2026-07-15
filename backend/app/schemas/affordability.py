@@ -8,6 +8,7 @@ class TodayOut(BaseModel):
     safe_to_spend_today: float
     safe_to_spend_message: str
     can_calculate: bool
+    has_linked_data: bool
     month_to_date_spending: float
     month_end_forecast: float
     spending_ceiling: float | None

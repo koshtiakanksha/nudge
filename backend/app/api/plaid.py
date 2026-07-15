@@ -66,6 +66,24 @@ async def list_items(current: CurrentUser = Depends(get_current_user), db: Async
     ]
 
 
+@router.delete("/items/{item_id}", status_code=204)
+async def disconnect_item(
+    item_id: uuid.UUID,
+    current: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Unlinks a connected account. Transaction history already synced is
+    kept -- disconnecting removes the link, not the data."""
+    result = await db.execute(
+        select(PlaidItem).where(PlaidItem.id == item_id, PlaidItem.user_id == current.id)
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Account not found")
+    await db.delete(item)
+    await db.commit()
+
+
 @router.post("/sync/{item_id}", response_model=SyncResponse)
 async def sync_item(
     item_id: uuid.UUID,

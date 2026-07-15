@@ -37,6 +37,7 @@ class DashboardSummary(BaseModel):
 class AnomalyOut(BaseModel):
     id: uuid.UUID
     transaction_id: uuid.UUID
+    transaction_date: str | None
     merchant_name: str | None
     amount: float
     anomaly_score: float

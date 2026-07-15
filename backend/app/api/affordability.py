@@ -22,6 +22,7 @@ async def today(current: CurrentUser = Depends(get_current_user), db: AsyncSessi
         safe_to_spend_today=safe["safe_to_spend_today"],
         safe_to_spend_message=safe["message"],
         can_calculate=safe["can_calculate"],
+        has_linked_data=ctx["has_linked_data"],
         month_to_date_spending=ctx["month_to_date_spending"],
         month_end_forecast=ctx["month_end_forecast"],
         spending_ceiling=ctx["spending_ceiling"],

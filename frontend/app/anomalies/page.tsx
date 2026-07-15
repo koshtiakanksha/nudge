@@ -106,7 +106,9 @@ export default function AnomaliesPage() {
                     <p className="text-sm font-medium">{a.merchant_name}</p>
                     <span className="font-mono text-sm">{formatCurrency(a.amount)}</span>
                   </div>
-                  <p className="text-xs text-slate mt-0.5">{formatDate(a.created_at)}</p>
+                  <p className="text-xs text-slate mt-0.5">
+                    {a.transaction_date ? formatDate(a.transaction_date) : "Date unknown"}
+                  </p>
                   {a.ai_context && <p className="text-sm text-ink mt-2 leading-relaxed">{a.ai_context}</p>}
 
                   {a.user_marked_intentional === null ? (

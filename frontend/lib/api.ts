@@ -53,12 +53,33 @@ export const api = {
     request<{ new_transactions: number; accounts_synced: number; mock_mode: boolean }>(`/plaid/sync/${itemId}`, {
       method: "POST",
     }),
+  disconnectItem: (itemId: string) =>
+    request<void>(`/plaid/items/${itemId}`, { method: "DELETE" }),
 
   // Transactions
-  listTransactions: (page = 1, pageSize = 50, category?: string) =>
+  listTransactions: (page = 1, pageSize = 50, category?: string, rangePreset?: string) =>
     request<import("@/types/api").TransactionListResponse>(
-      `/transactions?page=${page}&page_size=${pageSize}${category ? `&category=${encodeURIComponent(category)}` : ""}`
+      `/transactions?page=${page}&page_size=${pageSize}${category ? `&category=${encodeURIComponent(category)}` : ""}${rangePreset ? `&range_preset=${rangePreset}` : ""}`
     ),
+  downloadTransactionsCsv: async (category?: string, rangePreset?: string) => {
+    const params = new URLSearchParams();
+    if (category) params.set("category", category);
+    if (rangePreset) params.set("range_preset", rangePreset);
+    const token = typeof window !== "undefined" ? localStorage.getItem("nudge_token") : null;
+    const res = await fetch(`${API_BASE}/transactions/export?${params.toString()}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to export transactions");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `nudge-transactions-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
   updateTransaction: (id: string, payload: { nudge_category?: string; is_non_negotiable?: boolean }) =>
     request<import("@/types/api").Transaction>(`/transactions/${id}`, {
       method: "PATCH",

@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.budget import Budget
+from app.models.plaid_item import PlaidItem
 from app.models.recurring_expense import RecurringExpense
 from app.models.transaction import Transaction
 from app.models.user import User
@@ -74,9 +75,20 @@ async def build_decision_context(db: AsyncSession, user_id) -> dict:
             worst_ratio = ratio
             risk_category = cat
 
+    has_linked_account = (
+        await db.execute(select(PlaidItem.id).where(PlaidItem.user_id == user_id).limit(1))
+    ).scalar_one_or_none() is not None
+    has_any_transaction = (
+        await db.execute(select(Transaction.id).where(Transaction.user_id == user_id).limit(1))
+    ).scalar_one_or_none() is not None
+    has_linked_data = has_linked_account or has_any_transaction
+
     if not safe["can_calculate"]:
         health = "Needs setup"
-        action = "Connect a bank account or upload a statement to calculate your safe-to-spend amount."
+        if has_linked_data:
+            action = "Set your monthly income or spend ceiling in Settings to calculate your safe-to-spend amount."
+        else:
+            action = "Connect a bank account or upload a statement to calculate your safe-to-spend amount."
     elif safe["remaining_safe_money"] <= 0:
         health = "Tight"
         action = "Pause flexible spending today or rebalance your budget."
@@ -94,6 +106,7 @@ async def build_decision_context(db: AsyncSession, user_id) -> dict:
         "budget": budget,
         "allocations": allocations,
         "category_spend": category_spend,
+        "has_linked_data": has_linked_data,
         "month_to_date_spending": round(mtd_spend, 2),
         "month_end_forecast": month_end_forecast,
         "spending_ceiling": safe["spending_ceiling"],

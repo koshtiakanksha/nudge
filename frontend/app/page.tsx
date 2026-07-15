@@ -35,11 +35,24 @@ export default function TodayPage() {
         ) : today && !today.can_calculate ? (
           <Card className="text-center py-10">
             <Wallet className="mx-auto text-slate mb-3" size={28} />
-            <p className="text-lg font-display font-semibold">Connect a bank account or upload a statement to calculate your safe-to-spend amount.</p>
-            <div className="flex justify-center gap-3 mt-5">
-              <Link href="/transactions" className="px-4 py-2 bg-moss text-paper rounded-md text-sm">Connect bank</Link>
-              <Link href="/statements" className="px-4 py-2 border border-line rounded-md text-sm">Upload statement</Link>
-            </div>
+            {today.has_linked_data ? (
+              <>
+                <p className="text-lg font-display font-semibold">
+                  Your account is connected. Set your monthly income or spend ceiling to calculate your safe-to-spend amount.
+                </p>
+                <div className="flex justify-center gap-3 mt-5">
+                  <Link href="/settings" className="px-4 py-2 bg-moss text-paper rounded-md text-sm">Go to Settings</Link>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-lg font-display font-semibold">Connect a bank account or upload a statement to calculate your safe-to-spend amount.</p>
+                <div className="flex justify-center gap-3 mt-5">
+                  <Link href="/transactions" className="px-4 py-2 bg-moss text-paper rounded-md text-sm">Connect bank</Link>
+                  <Link href="/statements" className="px-4 py-2 border border-line rounded-md text-sm">Upload statement</Link>
+                </div>
+              </>
+            )}
           </Card>
         ) : today ? (
           <>

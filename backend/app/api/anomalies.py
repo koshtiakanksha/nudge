@@ -33,6 +33,7 @@ async def scan_for_anomalies(
         {"id": t.id, "amount": float(t.amount), "date": t.date, "merchant_name": t.merchant_name or "Unknown"}
         for t in txns
     ]
+    txn_date_by_id = {t.id: t.date for t in txns}
     flagged = detect_anomalies(txn_dicts)
 
     existing_result = await db.execute(select(Anomaly.transaction_id).where(Anomaly.user_id == current.id))
@@ -58,15 +59,18 @@ async def scan_for_anomalies(
     for a in created:
         await db.refresh(a)
 
-    return [_to_out(a) for a in created]
+    return [_to_out(a, txn_date_by_id.get(a.transaction_id)) for a in created]
 
 
 @router.get("", response_model=list[AnomalyOut])
 async def list_anomalies(current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(Anomaly).where(Anomaly.user_id == current.id).order_by(Anomaly.created_at.desc())
+        select(Anomaly, Transaction.date)
+        .join(Transaction, Transaction.id == Anomaly.transaction_id, isouter=True)
+        .where(Anomaly.user_id == current.id)
+        .order_by(Anomaly.created_at.desc())
     )
-    return [_to_out(a) for a in result.scalars().all()]
+    return [_to_out(a, txn_date) for a, txn_date in result.all()]
 
 
 @router.post("/{anomaly_id}/feedback", response_model=AnomalyOut)
@@ -87,13 +91,16 @@ async def submit_feedback(
     anomaly.notified = True
     await db.commit()
     await db.refresh(anomaly)
-    return _to_out(anomaly)
+    txn_result = await db.execute(select(Transaction.date).where(Transaction.id == anomaly.transaction_id))
+    txn_date = txn_result.scalar_one_or_none()
+    return _to_out(anomaly, txn_date)
 
 
-def _to_out(a: Anomaly) -> AnomalyOut:
+def _to_out(a: Anomaly, transaction_date=None) -> AnomalyOut:
     return AnomalyOut(
         id=a.id,
         transaction_id=a.transaction_id,
+        transaction_date=transaction_date.isoformat() if transaction_date else None,
         merchant_name=a.merchant_name,
         amount=float(a.amount),
         anomaly_score=float(a.anomaly_score),

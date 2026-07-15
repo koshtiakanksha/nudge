@@ -13,6 +13,14 @@ const CATEGORIES = [
   "Shopping", "Travel", "Utilities & Bills", "Subscriptions", "Other",
 ];
 
+const RANGE_OPTIONS = [
+  { value: "", label: "All time" },
+  { value: "this_month", label: "This month" },
+  { value: "last_3_months", label: "Last 3 months" },
+  { value: "ytd", label: "Year to date" },
+  { value: "last_year", label: "Last year" },
+];
+
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [items, setItems] = useState<PlaidItem[]>([]);
@@ -21,10 +29,12 @@ export default function TransactionsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [linking, setLinking] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [rangePreset, setRangePreset] = useState("");
+  const [exporting, setExporting] = useState(false);
 
-  const load = () => {
+  const load = (range = rangePreset) => {
     setLoading(true);
-    Promise.all([api.listTransactions(1, 100), api.listPlaidItems()])
+    Promise.all([api.listTransactions(1, 200, undefined, range || undefined), api.listPlaidItems()])
       .then(([txnRes, itemsRes]) => {
         setTransactions(txnRes.items);
         setItems(itemsRes);
@@ -34,6 +44,23 @@ export default function TransactionsPage() {
         setLinkError(err instanceof Error ? err.message : "Failed to load your data. Check the console for details.");
       })
       .finally(() => setLoading(false));
+  };
+
+  const handleRangeChange = (value: string) => {
+    setRangePreset(value);
+    load(value);
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await api.downloadTransactionsCsv(undefined, rangePreset || undefined);
+    } catch (err) {
+      console.error("Failed to export:", err);
+      setLinkError(err instanceof Error ? err.message : "Export failed. Check the console for details.");
+    } finally {
+      setExporting(false);
+    }
   };
 
   useEffect(() => {
@@ -71,6 +98,20 @@ export default function TransactionsPage() {
     }
   };
 
+  const handleDisconnect = async (itemId: string, institutionName: string) => {
+    if (!confirm(`Disconnect ${institutionName}? Your synced transaction history will be kept, but this account will stop syncing new activity.`)) {
+      return;
+    }
+    setLinkError(null);
+    try {
+      await api.disconnectItem(itemId);
+      setItems((prev) => prev.filter((i) => i.id !== itemId));
+    } catch (err) {
+      console.error("Failed to disconnect:", err);
+      setLinkError(err instanceof Error ? err.message : "Failed to disconnect. Check the console for details.");
+    }
+  };
+
   const handleCategoryChange = async (txnId: string, category: string) => {
     const updated = await api.updateTransaction(txnId, { nudge_category: category });
     setTransactions((prev) => prev.map((t) => (t.id === txnId ? updated : t)));
@@ -92,17 +133,13 @@ export default function TransactionsPage() {
               {linking ? "Linking…" : "Link a bank account"}
             </button>
           ) : (
-            items.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => handleSync(item.id)}
-                disabled={syncing}
-                className="flex items-center gap-2 px-3 py-1.5 border border-line rounded-md text-sm hover:bg-line/40 transition-colors disabled:opacity-50"
-              >
-                <RefreshCw size={14} className={syncing ? "animate-spin" : ""} />
-                Sync {item.institution_name}
-              </button>
-            ))
+            <button
+              onClick={handleLink}
+              disabled={linking}
+              className="px-3 py-1.5 border border-line rounded-md text-sm hover:bg-line/40 transition-colors disabled:opacity-50"
+            >
+              {linking ? "Linking…" : "+ Link another account"}
+            </button>
           )}
         </div>
 
@@ -111,6 +148,64 @@ export default function TransactionsPage() {
             {linkError}
           </p>
         )}
+
+        {items.length > 0 && (
+          <div className="space-y-3 mb-6">
+            {items.map((item) => (
+              <Card key={item.id} className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{item.institution_name}</span>
+                    <span className="inline-flex items-center gap-1 text-xs text-moss">
+                      <Check size={12} /> Connected
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate mt-1">
+                    {item.accounts.map((a) => `${a.name} ••${a.mask}`).join(" · ") || "No accounts"}
+                  </p>
+                  <p className="text-xs text-slate mt-0.5">
+                    {item.last_synced_at ? `Last synced ${formatDate(item.last_synced_at)}` : "Never synced"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleSync(item.id)}
+                    disabled={syncing}
+                    className="flex items-center gap-2 px-3 py-1.5 border border-line rounded-md text-sm hover:bg-line/40 transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw size={14} className={syncing ? "animate-spin" : ""} />
+                    Sync
+                  </button>
+                  <button
+                    onClick={() => handleDisconnect(item.id, item.institution_name)}
+                    className="px-3 py-1.5 text-sm text-clay hover:bg-clay/10 rounded-md transition-colors"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between mb-3">
+          <select
+            value={rangePreset}
+            onChange={(e) => handleRangeChange(e.target.value)}
+            className="border border-line rounded-md px-3 py-1.5 text-sm bg-white/60"
+          >
+            {RANGE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={handleExport}
+            disabled={exporting || transactions.length === 0}
+            className="px-3 py-1.5 border border-line rounded-md text-sm hover:bg-line/40 transition-colors disabled:opacity-50"
+          >
+            {exporting ? "Exporting…" : "Download CSV"}
+          </button>
+        </div>
 
         <Card padded={false} className="overflow-hidden">
           {loading ? (
