@@ -8,10 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import CurrentUser, get_current_user
 from app.db.session import get_db
 from app.models.budget import Budget
+from app.models.budget_category import BudgetCategory
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.budget import BudgetAdjustRequest, BudgetGenerateRequest, BudgetOut, BudgetSaveRequest
 from app.services.budget_engine import diff_allocations
+from app.services.category_role_service import is_non_negotiable, roles_for_categories
 from app.services.claude_service import claude_service
 
 router = APIRouter(prefix="/budgets", tags=["budgets"])
@@ -69,6 +71,25 @@ async def _month_spend_by_category(db: AsyncSession, user_id, month: date) -> di
     return {cat: round(total, 2) for cat, total in totals.items()}
 
 
+async def _non_negotiables_for(db: AsyncSession, user_id, spending_history: dict[str, float]) -> list[str]:
+    """
+    Was: a hardcoded set of 4 literal category names ({"Rent",
+    "Utilities", "Utilities & Bills", "Health"}) -- it ignored whatever
+    the user actually configured in Budget Categories entirely, and
+    couldn't recognize a category outside that exact list no matter how
+    the user set it up.
+
+    Now: reads the user's real BudgetCategory rows (an explicit
+    category_type="fixed" always wins) and falls back to name-based
+    defaults (Rent, Utilities, Insurance, etc.) for categories the user
+    hasn't explicitly configured yet.
+    """
+    result = await db.execute(select(BudgetCategory).where(BudgetCategory.user_id == user_id))
+    category_types = {c.name: c.category_type for c in result.scalars().all()}
+    roles = roles_for_categories(list(spending_history.keys()), category_types)
+    return [cat for cat, role in roles.items() if is_non_negotiable(role)]
+
+
 def _normalize_allocations(raw: dict) -> dict:
     allocations = {}
     for category, alloc in (raw or {}).items():
@@ -116,7 +137,7 @@ async def generate_budget(
         return await _to_budget_out(db, existing)
 
     spending_history = await _historical_spend_by_category(db, current.id)
-    non_negotiables = [cat for cat in spending_history if cat in {"Rent", "Utilities", "Utilities & Bills", "Health"}]
+    non_negotiables = await _non_negotiables_for(db, current.id, spending_history)
     previous_allocations = await _previous_month_allocations(db, current.id, month)
 
     ai_result = claude_service.generate_budget(
