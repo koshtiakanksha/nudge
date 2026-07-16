@@ -10,11 +10,13 @@ from app.core.security import CurrentUser, get_current_user
 from app.db.session import get_db
 from app.models.anomaly import Anomaly
 from app.models.budget import Budget
+from app.models.budget_category import BudgetCategory
 from app.models.budget_recommendation import BudgetRecommendation
 from app.models.category_rule import CategoryRule
 from app.models.recurring_expense import RecurringExpense
 from app.models.statement import StatementUpload
 from app.models.transaction import Transaction
+from app.services.category_role_service import is_non_negotiable, roles_for_categories
 from app.schemas.statements import (
     AnomalyStatusUpdate,
     BudgetRecommendationOut,
@@ -293,9 +295,25 @@ async def generate_budget_from_history(current: CurrentUser = Depends(get_curren
     return result
 
 
+async def _non_negotiables_for(db: AsyncSession, user_id, categories: list[str]) -> set[str]:
+    """
+    Was: a hardcoded set of 3 literal category names ({"Rent",
+    "Utilities", "Debt Payments"}) -- a THIRD different hardcoded
+    non-negotiables list in this codebase (budgets.py had its own
+    4-name set before Step 2 fixed it; this is the statement-upload
+    save path's independent copy of the same bug). Now reads the same
+    BudgetCategory rows and role logic budgets.py already uses.
+    """
+    result = await db.execute(select(BudgetCategory).where(BudgetCategory.user_id == user_id))
+    category_types = {c.name: c.category_type for c in result.scalars().all()}
+    roles = roles_for_categories(categories, category_types)
+    return {cat for cat, role in roles.items() if is_non_negotiable(role)}
+
+
 @router.post("/budget/save")
 async def save_generated_budget(payload: SaveGeneratedBudgetRequest, current: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    allocations = {r.category: {"allocated": r.recommended_amount, "spent": 0, "is_non_neg": r.category in {"Rent", "Utilities", "Debt Payments"}} for r in payload.recommendations}
+    non_negotiables = await _non_negotiables_for(db, current.id, [r.category for r in payload.recommendations])
+    allocations = {r.category: {"allocated": r.recommended_amount, "spent": 0, "is_non_neg": r.category in non_negotiables} for r in payload.recommendations}
     budget = Budget(user_id=current.id, month=payload.month.replace(day=1), allocations=allocations, total_allocated=sum(r.recommended_amount for r in payload.recommendations), total_budget=payload.total_budget, income_estimate=payload.income_estimate, generated_by_ai=True, generated_from_statement=True, ai_reasoning="Generated from uploaded statement history.")
     db.add(budget)
     await db.commit()

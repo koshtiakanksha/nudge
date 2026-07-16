@@ -13,6 +13,7 @@ from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.budget import BudgetAdjustRequest, BudgetGenerateRequest, BudgetOut, BudgetSaveRequest
 from app.services.budget_engine import diff_allocations
+from app.services.category_profile_service import build_category_profiles
 from app.services.category_role_service import is_non_negotiable, roles_for_categories
 from app.services.claude_service import claude_service
 
@@ -32,7 +33,16 @@ async def _previous_month_allocations(db: AsyncSession, user_id, month: date) ->
     return prev.allocations if prev else None
 
 
-async def _historical_spend_by_category(db: AsyncSession, user_id, months: int = 3) -> dict[str, float]:
+async def _category_baselines(db: AsyncSession, user_id, months: int = 3) -> dict[str, float]:
+    """
+    Was: total spend / months per category -- a flat average, skewed by
+    any single expensive month. That's the exact weakness
+    category_profile_service (median + recency-weighted average +
+    volatility-aware buffer) was built to fix in the statement-upload
+    flow -- this flow just wasn't calling it yet. Now both flows read
+    their category baselines from the same function instead of two
+    different formulas for the same kind of data.
+    """
     cutoff = date.today() - relativedelta(months=months)
     result = await db.execute(
         select(Transaction).where(
@@ -42,14 +52,8 @@ async def _historical_spend_by_category(db: AsyncSession, user_id, months: int =
         )
     )
     txns = result.scalars().all()
-
-    totals: dict[str, float] = {}
-    for t in txns:
-        cat = t.nudge_category or "Other"
-        totals[cat] = totals.get(cat, 0) + abs(float(t.amount))
-
-    # average per month
-    return {cat: round(total / months, 2) for cat, total in totals.items()}
+    profiles = build_category_profiles(txns)
+    return {cat: profile.suggested_amount for cat, profile in profiles.items()}
 
 
 async def _month_spend_by_category(db: AsyncSession, user_id, month: date) -> dict[str, float]:
@@ -136,7 +140,7 @@ async def generate_budget(
         await _with_current_spend(db, existing)
         return await _to_budget_out(db, existing)
 
-    spending_history = await _historical_spend_by_category(db, current.id)
+    spending_history = await _category_baselines(db, current.id)
     non_negotiables = await _non_negotiables_for(db, current.id, spending_history)
     previous_allocations = await _previous_month_allocations(db, current.id, month)
 

@@ -9,7 +9,9 @@ from pathlib import Path
 
 import pandas as pd
 
+from app.services.budget_engine import compute_budget_allocation
 from app.services.category_profile_service import build_category_profiles
+from app.services.category_role_service import is_non_negotiable, roles_for_categories
 from app.services.claude_service import claude_service
 from app.services.income_service import detect_income
 from app.services.transaction_classification_service import (
@@ -19,6 +21,11 @@ from app.services.transaction_classification_service import (
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 SUPPORTED_EXTENSIONS = {".csv", ".txt", ".xlsx", ".pdf"}
+# Matches User.buffer_pct's default (app/models/user.py) -- the
+# statement-upload flow doesn't have a user record to read a real
+# per-user buffer from here, so it falls back to the same default the
+# Plaid-linked flow starts new users at.
+DEFAULT_BUDGET_BUFFER_PCT = 0.10
 
 DEFAULT_CATEGORIES = [
     "Rent",
@@ -389,29 +396,52 @@ def budget_recommendations(transactions: list, target_month: date) -> dict:
     # own median, recency-weighted average, and a buffer sized to how
     # volatile (and how essential) that specific category actually is.
     category_profiles = build_category_profiles(non_travel)
+
+    # Was: sum every category's suggested amount and call whatever was
+    # left over "Savings" -- nothing checked that sum against income at
+    # all, so total_budget could exceed income_estimate with no
+    # correction. compute_budget_allocation is the same deterministic,
+    # income-respecting engine budgets.py's /budgets/generate already
+    # uses: non-negotiables are funded first, everything is capped to
+    # what's actually spendable, and it's flagged (not silently
+    # overspent) if non-negotiables alone don't fit.
+    #
+    # Note: non-negotiables here are name-based only (no user_id/db
+    # session in this function to read real BudgetCategory overrides,
+    # same limitation category_profile_service already documents) --
+    # per-user overrides land when this flow gets real DB access.
+    roles = roles_for_categories(list(category_profiles.keys()))
+    non_negotiables = [cat for cat, role in roles.items() if is_non_negotiable(role)]
+    spending_by_category = {cat: profile.suggested_amount for cat, profile in category_profiles.items()}
+    buffer_reserved = round(income_estimate * DEFAULT_BUDGET_BUFFER_PCT, 2) if income_estimate else 0.0
+    spendable = max(round(income_estimate - buffer_reserved, 2), 0.0)
+    engine_result = compute_budget_allocation(spendable, buffer_reserved, spending_by_category, non_negotiables)
+
     warnings = []
+    if engine_result.non_negotiables_constrained:
+        warnings.append("Non-negotiable categories alone exceed your estimated income; they were scaled down to fit.")
+
     recs = []
     for item in categories:
         profile = category_profiles.get(item["category"])
+        alloc = engine_result.allocations.get(item["category"])
+        recommended = alloc["allocated"] if alloc else round(item["amount"] / months, 2)
         if profile is None:
-            monthly_avg = item["amount"] / months
-            recommended = round(monthly_avg, 2)
-            reasoning = f"Your average {item['category']} spend is ${monthly_avg:.2f}/month based on uploaded history."
+            reasoning = f"Your average {item['category']} spend is ${item['amount'] / months:.2f}/month based on uploaded history."
             confidence_score = 0.75 if months >= 3 else 0.55
+        elif profile.used_recurring_amount:
+            reasoning = (
+                f"{item['category']} recurs at ${profile.recurring_component:.2f}/month "
+                f"across {profile.months_of_history} month(s), so that recurring amount is used directly."
+            )
+            confidence_score = profile.confidence
         else:
-            recommended = profile.suggested_amount
-            if profile.used_recurring_amount:
-                reasoning = (
-                    f"{item['category']} recurs at ${profile.recurring_component:.2f}/month "
-                    f"across {profile.months_of_history} month(s), so that recurring amount is used directly."
-                )
-            else:
-                low, high = profile.typical_range
-                reasoning = (
-                    f"Median {item['category']} spend was ${profile.median_monthly_spend:.2f}/month "
-                    f"(typical range ${low:.2f}-${high:.2f}) across {profile.months_of_history} "
-                    f"month(s), with a {profile.buffer_pct * 100:.0f}% buffer applied."
-                )
+            low, high = profile.typical_range
+            reasoning = (
+                f"Median {item['category']} spend was ${profile.median_monthly_spend:.2f}/month "
+                f"(typical range ${low:.2f}-${high:.2f}) across {profile.months_of_history} "
+                f"month(s), with a {profile.buffer_pct * 100:.0f}% buffer applied."
+            )
             confidence_score = profile.confidence
         if recommended > max(income_estimate * 0.25, 500) and income_estimate:
             warnings.append(f"{item['category']} is a high spending category compared with your estimated income.")
@@ -423,8 +453,12 @@ def budget_recommendations(transactions: list, target_month: date) -> dict:
         })
     total_budget = round(sum(r["recommended_amount"] for r in recs), 2)
     if income_estimate:
-        savings = max(income_estimate - total_budget, 0)
-        recs.append({"category": "Savings", "recommended_amount": round(savings, 2), "reasoning": "Recommended as the remaining cash after estimated expenses.", "confidence_score": 0.65})
+        recs.append({
+            "category": "Savings",
+            "recommended_amount": round(max(engine_result.unallocated_remainder, 0), 2),
+            "reasoning": "Recommended as the remaining cash after estimated expenses and buffer.",
+            "confidence_score": 0.65,
+        })
     return {
         "month": target_month,
         "income_estimate": income_estimate,
@@ -432,8 +466,9 @@ def budget_recommendations(transactions: list, target_month: date) -> dict:
         "total_budget": total_budget,
         "recommendations": recs,
         "category_profiles": {k: v.to_dict() for k, v in category_profiles.items()},
+        "allocation": engine_result.to_dict(),
         "warnings": warnings,
-        "explanation": "Built from uploaded statement history using per-category medians, recency-weighted averages, and volatility-aware buffers.",
+        "explanation": "Built from uploaded statement history using per-category medians, recency-weighted averages, and volatility-aware buffers, capped to your estimated spendable income.",
         "not_enough_history": summary["months_of_history"] < 2,
     }
 
