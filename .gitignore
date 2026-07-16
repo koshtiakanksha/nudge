@@ -33,3 +33,6 @@ build/
 
 # Docker/local logs
 *.log
+# Generated files
+.DS_Store
+*.tsbuildinfo
