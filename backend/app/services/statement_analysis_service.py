@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from app.services.category_profile_service import build_category_profiles
 from app.services.claude_service import claude_service
 from app.services.income_service import detect_income
 from app.services.transaction_classification_service import (
@@ -371,7 +372,8 @@ def detect_travel(transactions: list) -> list[dict]:
 def budget_recommendations(transactions: list, target_month: date) -> dict:
     trends = monthly_trends(transactions)
     summary = summarize_transactions(transactions)
-    categories = category_totals([t for t in transactions if not getattr(t, "is_anomaly", False) and (t.nudge_category != "Travel")])
+    non_travel = [t for t in transactions if not getattr(t, "is_anomaly", False) and (t.nudge_category != "Travel")]
+    categories = category_totals(non_travel)
     months = max(summary["months_of_history"], 1)
     income_profile = detect_income(transactions)
     # Conservative estimate is what the budget should plan around --
@@ -380,20 +382,44 @@ def budget_recommendations(transactions: list, target_month: date) -> dict:
     income_estimate = income_profile.conservative_monthly_income or (
         round(summary["total_income"] / months, 2) if summary["total_income"] else 0
     )
+    # Was: monthly_avg = item["amount"] / months, with a hardcoded 10%
+    # haircut applied only to Dining/Shopping/Entertainment and nothing
+    # else -- one flat average for every category, easily skewed by a
+    # single expensive month. category_profiles gives each category its
+    # own median, recency-weighted average, and a buffer sized to how
+    # volatile (and how essential) that specific category actually is.
+    category_profiles = build_category_profiles(non_travel)
     warnings = []
     recs = []
     for item in categories:
-        monthly_avg = item["amount"] / months
-        recommended = round(monthly_avg, 2)
-        if item["category"] in {"Dining", "Shopping", "Entertainment"}:
-            recommended = round(monthly_avg * 0.9, 2)
-        if monthly_avg > max(income_estimate * 0.25, 500) and income_estimate:
+        profile = category_profiles.get(item["category"])
+        if profile is None:
+            monthly_avg = item["amount"] / months
+            recommended = round(monthly_avg, 2)
+            reasoning = f"Your average {item['category']} spend is ${monthly_avg:.2f}/month based on uploaded history."
+            confidence_score = 0.75 if months >= 3 else 0.55
+        else:
+            recommended = profile.suggested_amount
+            if profile.used_recurring_amount:
+                reasoning = (
+                    f"{item['category']} recurs at ${profile.recurring_component:.2f}/month "
+                    f"across {profile.months_of_history} month(s), so that recurring amount is used directly."
+                )
+            else:
+                low, high = profile.typical_range
+                reasoning = (
+                    f"Median {item['category']} spend was ${profile.median_monthly_spend:.2f}/month "
+                    f"(typical range ${low:.2f}-${high:.2f}) across {profile.months_of_history} "
+                    f"month(s), with a {profile.buffer_pct * 100:.0f}% buffer applied."
+                )
+            confidence_score = profile.confidence
+        if recommended > max(income_estimate * 0.25, 500) and income_estimate:
             warnings.append(f"{item['category']} is a high spending category compared with your estimated income.")
         recs.append({
             "category": item["category"],
-            "recommended_amount": recommended,
-            "reasoning": f"Your average {item['category']} spend is ${monthly_avg:.2f}/month based on uploaded history.",
-            "confidence_score": 0.75 if months >= 3 else 0.55,
+            "recommended_amount": round(recommended, 2),
+            "reasoning": reasoning,
+            "confidence_score": confidence_score,
         })
     total_budget = round(sum(r["recommended_amount"] for r in recs), 2)
     if income_estimate:
@@ -405,8 +431,9 @@ def budget_recommendations(transactions: list, target_month: date) -> dict:
         "income_profile": income_profile.to_dict(),
         "total_budget": total_budget,
         "recommendations": recs,
+        "category_profiles": {k: v.to_dict() for k, v in category_profiles.items()},
         "warnings": warnings,
-        "explanation": "Built from uploaded statement history using category averages, recurring expenses, and conservative reductions for flexible spending.",
+        "explanation": "Built from uploaded statement history using per-category medians, recency-weighted averages, and volatility-aware buffers.",
         "not_enough_history": summary["months_of_history"] < 2,
     }
 
