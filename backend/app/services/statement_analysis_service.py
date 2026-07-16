@@ -10,6 +10,11 @@ from pathlib import Path
 import pandas as pd
 
 from app.services.claude_service import claude_service
+from app.services.income_service import detect_income
+from app.services.transaction_classification_service import (
+    income_eligible,
+    merchant_key,
+)
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 SUPPORTED_EXTENSIONS = {".csv", ".txt", ".xlsx", ".pdf"}
@@ -74,13 +79,6 @@ class ParsedTransaction:
     confidence_score: float
     raw_data: dict
     currency: str = "USD"
-
-
-def merchant_key(value: str | None) -> str:
-    text = (value or "").lower()
-    text = re.sub(r"\d+", "", text)
-    text = re.sub(r"[^a-z ]+", " ", text)
-    return re.sub(r"\s+", " ", text).strip()[:80] or "unknown"
 
 
 def validate_upload(filename: str, size: int) -> str:
@@ -235,7 +233,11 @@ def transaction_type_for(amount: float, description: str) -> str:
 
 def summarize_transactions(transactions: list) -> dict:
     included = [t for t in transactions if not getattr(t, "is_ignored", False)]
-    income = sum(float(t.amount) for t in included if float(t.amount) > 0)
+    # Was: sum(t.amount for t in included if t.amount > 0) -- counted
+    # every positive transaction as income, including transfers between
+    # a user's own accounts and refunds. income_eligible() excludes
+    # those via transaction_classification_service before summing.
+    income = sum(float(t.amount) for t in income_eligible(included))
     spending = sum(abs(float(t.amount)) for t in included if float(t.amount) < 0)
     dates = [t.date for t in included]
     days = max((max(dates) - min(dates)).days + 1, 1) if dates else 1
@@ -371,7 +373,13 @@ def budget_recommendations(transactions: list, target_month: date) -> dict:
     summary = summarize_transactions(transactions)
     categories = category_totals([t for t in transactions if not getattr(t, "is_anomaly", False) and (t.nudge_category != "Travel")])
     months = max(summary["months_of_history"], 1)
-    income_estimate = round(summary["total_income"] / months, 2) if summary["total_income"] else 0
+    income_profile = detect_income(transactions)
+    # Conservative estimate is what the budget should plan around --
+    # falls back to the old flat total/months average only when
+    # income_service has nothing to go on at all (e.g. one transaction).
+    income_estimate = income_profile.conservative_monthly_income or (
+        round(summary["total_income"] / months, 2) if summary["total_income"] else 0
+    )
     warnings = []
     recs = []
     for item in categories:
@@ -394,12 +402,20 @@ def budget_recommendations(transactions: list, target_month: date) -> dict:
     return {
         "month": target_month,
         "income_estimate": income_estimate,
+        "income_profile": income_profile.to_dict(),
         "total_budget": total_budget,
         "recommendations": recs,
         "warnings": warnings,
         "explanation": "Built from uploaded statement history using category averages, recurring expenses, and conservative reductions for flexible spending.",
         "not_enough_history": summary["months_of_history"] < 2,
     }
+
+
+def income_summary(transactions: list) -> dict:
+    """Direct access to income_service's output for this transaction
+    set -- for API routes or the chat/affordability layer that need the
+    income profile without generating a full budget recommendation."""
+    return detect_income(transactions).to_dict()
 
 
 def insights(transactions: list) -> list[dict]:
@@ -431,5 +447,6 @@ statement_analysis_service = {
     "detect_recurring": detect_recurring,
     "detect_soft_anomalies": detect_soft_anomalies,
     "budget_recommendations": budget_recommendations,
+    "income_summary": income_summary,
     "insights": insights,
 }
