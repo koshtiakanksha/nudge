@@ -133,6 +133,13 @@ class BudgetRecommendationOut(BaseModel):
     confidence_score: float
 
 
+class CategoryEvidenceOut(BaseModel):
+    typical_range_low: float
+    typical_range_high: float
+    trend: str
+    confidence: float
+
+
 class SmartBudgetOut(BaseModel):
     month: date
     income_estimate: float
@@ -140,6 +147,13 @@ class SmartBudgetOut(BaseModel):
     recommendations: list[BudgetRecommendationOut]
     warnings: list[str]
     explanation: str
+    # Both were already being computed by budget_recommendations() (see
+    # income_service.py / category_profile_service.py) but silently
+    # dropped here -- response_model only serializes fields it declares,
+    # so nothing was reaching the frontend even though the backend had
+    # already done the work.
+    income_stability: str = "insufficient_data"
+    category_evidence: dict[str, CategoryEvidenceOut] = {}
 
 
 class SaveGeneratedBudgetRequest(BaseModel):
