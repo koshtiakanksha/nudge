@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { BudgetRecommendation, SmartBudget } from "@/types/api";
 import { Card, CardLabel } from "@/components/card";
 import { PageHeader } from "@/components/page-header";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, cn } from "@/lib/format";
 
 export default function SmartBudgetPage() {
   const [budget, setBudget] = useState<SmartBudget | null>(null);
@@ -97,6 +97,25 @@ export default function SmartBudgetPage() {
                     </label>
                   </div>
                   <p className="text-xs text-slate mt-2">{rec.reasoning}</p>
+                  {budget.category_evidence[rec.category] && (
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <span className="text-[11px] text-slate">
+                        Typical range: {formatCurrency(budget.category_evidence[rec.category].typical_range_low)}
+                        {" - "}
+                        {formatCurrency(budget.category_evidence[rec.category].typical_range_high)}
+                      </span>
+                      {budget.category_evidence[rec.category].trend !== "flat" && budget.category_evidence[rec.category].trend !== "insufficient_data" && (
+                        <span
+                          className={cn(
+                            "text-[10px] px-1.5 py-0.5 rounded-sm font-medium",
+                            budget.category_evidence[rec.category].trend === "increasing" ? "bg-clay/10 text-clay" : "bg-moss/10 text-moss"
+                          )}
+                        >
+                          {budget.category_evidence[rec.category].trend === "increasing" ? "Trending up" : "Trending down"}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </Card>
@@ -105,7 +124,21 @@ export default function SmartBudgetPage() {
               <Card>
                 <CardLabel>Budget total</CardLabel>
                 <p className="text-3xl font-display font-semibold">{formatCurrency(total)}</p>
-                <p className="text-sm text-slate mt-2">Income estimate: {formatCurrency(budget.income_estimate)}</p>
+                <p className="text-sm text-slate mt-2 flex items-center gap-2">
+                  Income estimate: {formatCurrency(budget.income_estimate)}
+                  <span
+                    className={cn(
+                      "text-[10px] px-1.5 py-0.5 rounded-sm font-medium",
+                      budget.income_stability === "stable"
+                        ? "bg-moss/10 text-moss"
+                        : budget.income_stability === "variable"
+                          ? "bg-gold/10 text-gold"
+                          : "bg-line/60 text-slate"
+                    )}
+                  >
+                    {budget.income_stability === "stable" ? "Stable income" : budget.income_stability === "variable" ? "Variable income" : "Limited history"}
+                  </span>
+                </p>
                 <button onClick={save} disabled={saving} className="mt-5 w-full px-4 py-2 bg-moss text-paper rounded-md text-sm font-medium flex items-center justify-center gap-1.5 disabled:opacity-60">
                   <Save size={15} /> {saving ? "Saving..." : "Save budget"}
                 </button>
