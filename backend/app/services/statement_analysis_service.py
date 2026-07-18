@@ -463,9 +463,19 @@ def budget_recommendations(transactions: list, target_month: date) -> dict:
         "month": target_month,
         "income_estimate": income_estimate,
         "income_profile": income_profile.to_dict(),
+        "income_stability": income_profile.stability,
         "total_budget": total_budget,
         "recommendations": recs,
         "category_profiles": {k: v.to_dict() for k, v in category_profiles.items()},
+        "category_evidence": {
+            cat: {
+                "typical_range_low": profile.typical_range[0],
+                "typical_range_high": profile.typical_range[1],
+                "trend": profile.trend,
+                "confidence": profile.confidence,
+            }
+            for cat, profile in category_profiles.items()
+        },
         "allocation": engine_result.to_dict(),
         "warnings": warnings,
         "explanation": "Built from uploaded statement history using per-category medians, recency-weighted averages, and volatility-aware buffers, capped to your estimated spendable income.",
