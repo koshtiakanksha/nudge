@@ -352,6 +352,13 @@ export interface BudgetRecommendation {
   confidence_score: number;
 }
 
+export interface CategoryEvidence {
+  typical_range_low: number;
+  typical_range_high: number;
+  trend: string;
+  confidence: number;
+}
+
 export interface SmartBudget {
   month: string;
   income_estimate: number;
@@ -359,4 +366,6 @@ export interface SmartBudget {
   recommendations: BudgetRecommendation[];
   warnings: string[];
   explanation: string;
+  income_stability: string;
+  category_evidence: Record<string, CategoryEvidence>;
 }
