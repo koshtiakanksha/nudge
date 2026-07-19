@@ -9,9 +9,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.services.budget_engine import compute_budget_allocation
+from app.services.budget_engine import compute_budget_allocation_v2
 from app.services.category_profile_service import build_category_profiles
-from app.services.category_role_service import is_non_negotiable, roles_for_categories
+from app.services.category_role_service import roles_for_categories
 from app.services.claude_service import claude_service
 from app.services.income_service import detect_income
 from app.services.transaction_classification_service import (
@@ -397,25 +397,27 @@ def budget_recommendations(transactions: list, target_month: date) -> dict:
     # volatile (and how essential) that specific category actually is.
     category_profiles = build_category_profiles(non_travel)
 
-    # Was: sum every category's suggested amount and call whatever was
-    # left over "Savings" -- nothing checked that sum against income at
-    # all, so total_budget could exceed income_estimate with no
-    # correction. compute_budget_allocation is the same deterministic,
-    # income-respecting engine budgets.py's /budgets/generate already
-    # uses: non-negotiables are funded first, everything is capped to
-    # what's actually spendable, and it's flagged (not silently
-    # overspent) if non-negotiables alone don't fit.
+    # Was (v1 engine): sum every category's suggested amount and call
+    # whatever was left over "Savings" -- nothing checked that sum
+    # against income at all, so total_budget could exceed income_estimate
+    # with no correction. Then (still v1): "Savings" was just another
+    # "other" category, splitting the remainder proportionally against
+    # Dining/Shopping by historical weight -- no actual priority despite
+    # what the reasoning text implied. compute_budget_allocation_v2 funds
+    # in role order (fixed_essential -> variable_essential ->
+    # savings_or_debt -> discretionary), so savings is funded before
+    # discretionary gets anything, and everything is still capped to
+    # what's actually spendable.
     #
-    # Note: non-negotiables here are name-based only (no user_id/db
-    # session in this function to read real BudgetCategory overrides,
-    # same limitation category_profile_service already documents) --
-    # per-user overrides land when this flow gets real DB access.
+    # Note: roles here are name-based only (no user_id/db session in
+    # this function to read real BudgetCategory overrides, same
+    # limitation category_profile_service already documents) -- per-user
+    # overrides land when this flow gets real DB access.
     roles = roles_for_categories(list(category_profiles.keys()))
-    non_negotiables = [cat for cat, role in roles.items() if is_non_negotiable(role)]
     spending_by_category = {cat: profile.suggested_amount for cat, profile in category_profiles.items()}
     buffer_reserved = round(income_estimate * DEFAULT_BUDGET_BUFFER_PCT, 2) if income_estimate else 0.0
     spendable = max(round(income_estimate - buffer_reserved, 2), 0.0)
-    engine_result = compute_budget_allocation(spendable, buffer_reserved, spending_by_category, non_negotiables)
+    engine_result = compute_budget_allocation_v2(spendable, buffer_reserved, spending_by_category, roles)
 
     warnings = []
     if engine_result.non_negotiables_constrained:
@@ -452,10 +454,19 @@ def budget_recommendations(transactions: list, target_month: date) -> dict:
             "confidence_score": confidence_score,
         })
     total_budget = round(sum(r["recommended_amount"] for r in recs), 2)
-    if income_estimate:
+    # Was: always appended a second "Savings" entry for whatever cash was
+    # left over, even when the user already had a real Savings category
+    # in `recs` from the loop above -- harmless when that entry was
+    # always $0 (the old engine never really prioritized savings), but
+    # now that compute_budget_allocation_v2 actually funds a real
+    # Savings category to a meaningful amount, appending a second
+    # "Savings" row would be a genuine duplicate in the response.
+    existing_categories = {r["category"] for r in recs}
+    if income_estimate and engine_result.unallocated_remainder > 0.01:
+        leftover_label = "Unallocated" if "Savings" in existing_categories else "Savings"
         recs.append({
-            "category": "Savings",
-            "recommended_amount": round(max(engine_result.unallocated_remainder, 0), 2),
+            "category": leftover_label,
+            "recommended_amount": round(engine_result.unallocated_remainder, 2),
             "reasoning": "Recommended as the remaining cash after estimated expenses and buffer.",
             "confidence_score": 0.65,
         })

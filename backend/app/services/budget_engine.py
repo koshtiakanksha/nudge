@@ -111,6 +111,117 @@ def compute_budget_allocation(
     )
 
 
+ENGINE_VERSION_V2 = "budget-engine-v2"
+ROLE_PRIORITY_ORDER = ["fixed_essential", "variable_essential", "savings_or_debt"]
+
+
+def _fund_tier(requested: dict[str, float], remaining: float) -> tuple[dict[str, float], float, bool]:
+    """
+    Fund each category in this tier up to its own requested amount --
+    unlike the final discretionary tier, this does NOT stretch to
+    consume all of `remaining`. If the tier's combined total exceeds
+    what's left, every category in the tier is scaled down proportionally
+    together, rather than funding some in full and leaving others at
+    zero (same fairness principle v1 already used for non-negotiables).
+    """
+    total_requested = sum(requested.values())
+    if total_requested <= 0:
+        return {}, remaining, False
+    if total_requested > remaining:
+        scale = remaining / total_requested if remaining > 0 else 0.0
+        allocated = {cat: round(amt * scale, 2) for cat, amt in requested.items()}
+        return allocated, 0.0, True
+    allocated = {cat: round(amt, 2) for cat, amt in requested.items()}
+    return allocated, round(remaining - total_requested, 2), False
+
+
+def compute_budget_allocation_v2(
+    spendable: float,
+    buffer_reserved: float,
+    spending_by_category: dict[str, float],
+    category_roles: dict[str, str],
+) -> AllocationResult:
+    """
+    Same determinism and no-invented-amounts guarantees as
+    compute_budget_allocation (v1), but funds categories in role-priority
+    order instead of a flat non-negotiable/everything-else binary:
+
+        1. fixed_essential    -- funded first (e.g. rent)
+        2. variable_essential -- funded next, at its own baseline (e.g. groceries)
+        3. savings_or_debt    -- funded next, BEFORE discretionary spending
+        4. discretionary (+ any role not listed above) -- gets whatever's
+           left, split proportionally to historical weight (the same
+           "stretch to fill the remainder" behavior v1 applied to every
+           non-fixed category)
+
+    This closes a real gap in v1: a "Savings" category was just another
+    "other" category competing proportionally with Dining and Shopping
+    for leftover money -- there was no actual prioritization, despite
+    what reasoning text elsewhere implies. Tiers 2-3 are capped to their
+    own requested amount (scaled down together if a tier can't be fully
+    funded) rather than stretched to consume everything left, so surplus
+    money reaches savings instead of piling into an already-funded
+    essential category.
+
+    Known limitation: non_negotiables_constrained only flags tier 1
+    (fixed_essential) being underfunded, matching v1's field semantics.
+    variable_essential or savings_or_debt can also come up short without
+    a distinct flag yet -- worth a dedicated field if the UI needs to
+    warn about that specifically.
+    """
+    spending_by_category = dict(spending_by_category or {})
+    category_roles = dict(category_roles or {})
+
+    tiers: dict[str, dict[str, float]] = {role: {} for role in ROLE_PRIORITY_ORDER}
+    discretionary_requested: dict[str, float] = {}
+    for cat, amt in spending_by_category.items():
+        role = category_roles.get(cat, "discretionary")
+        amt = max(amt, 0.0)
+        if role in tiers:
+            tiers[role][cat] = amt
+        else:
+            discretionary_requested[cat] = amt
+
+    allocations: dict[str, dict] = {}
+    remaining = spendable
+    non_negotiables_constrained = False
+    for role in ROLE_PRIORITY_ORDER:
+        allocated, remaining, constrained = _fund_tier(tiers[role], remaining)
+        is_non_neg = role == "fixed_essential"
+        if is_non_neg and constrained:
+            non_negotiables_constrained = True
+        for cat, amt in allocated.items():
+            allocations[cat] = {"allocated": amt, "is_non_neg": is_non_neg}
+        for cat in tiers[role]:
+            allocations.setdefault(cat, {"allocated": 0.0, "is_non_neg": is_non_neg})
+
+    total_discretionary = sum(discretionary_requested.values())
+    if discretionary_requested and remaining > 0:
+        if total_discretionary > 0:
+            for cat, amt in discretionary_requested.items():
+                share = amt / total_discretionary
+                allocations[cat] = {"allocated": round(remaining * share, 2), "is_non_neg": False}
+        else:
+            even_share = round(remaining / len(discretionary_requested), 2)
+            for cat in discretionary_requested:
+                allocations[cat] = {"allocated": even_share, "is_non_neg": False}
+    else:
+        for cat in discretionary_requested:
+            allocations.setdefault(cat, {"allocated": 0.0, "is_non_neg": False})
+
+    total_allocated = sum(v["allocated"] for v in allocations.values())
+    unallocated_remainder = round(spendable - total_allocated, 2)
+
+    return AllocationResult(
+        allocations=allocations,
+        buffer_reserved=buffer_reserved,
+        spendable=spendable,
+        unallocated_remainder=unallocated_remainder,
+        non_negotiables_constrained=non_negotiables_constrained,
+        engine_version=ENGINE_VERSION_V2,
+    )
+
+
 def validate_allocation(
     allocations: dict[str, dict], spendable: float, non_negotiables: list[str]
 ) -> tuple[bool, list[str]]:
