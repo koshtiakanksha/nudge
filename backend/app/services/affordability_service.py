@@ -7,6 +7,47 @@ def days_left_in_month(today: date) -> int:
     return max((today.replace(day=last_day) - today).days + 1, 1)
 
 
+def resolve_monthly_income(user_monthly_income: float | None, income_profile=None) -> tuple[float | None, str]:
+    """
+    Was: safe-to-spend was blocked entirely ("Needs setup") for any user
+    who hadn't manually entered a monthly income in Settings, even if
+    they had months of linked transaction history income_service could
+    derive a real estimate from.
+
+    Returns (income, source) where source is "manual", "estimated", or
+    "unavailable". Manual entry always wins when present -- a user who
+    set it deliberately shouldn't have it silently overridden by an
+    inferred number just because the inference exists.
+    """
+    if user_monthly_income is not None:
+        return user_monthly_income, "manual"
+    if income_profile is not None and getattr(income_profile, "conservative_monthly_income", 0) > 0:
+        return income_profile.conservative_monthly_income, "estimated"
+    return None, "unavailable"
+
+
+def project_month_end_spend(mtd_spend: float, elapsed_days: int, month_days: int, upcoming_bills: float = 0) -> float:
+    """
+    Was: pure linear extrapolation of month-to-date spend
+    (mtd_spend / elapsed_days * month_days) with upcoming_bills ignored
+    entirely -- even though calculate_safe_to_spend's own `remaining`
+    figure, shown right next to this one, already subtracts those same
+    upcoming bills. A user with modest daily spend but a large known
+    bill still due this month wouldn't get flagged "At risk" by this
+    number despite the inconsistency with safe-to-spend.
+
+    Still a linear extrapolation of past spend, not a real per-category
+    spending curve (rent up front, groceries weekly, entertainment
+    weekend-clustered) -- that's a bigger modeling project than this
+    fix. This closes the specific inconsistency between two numbers
+    that should agree on what's already known to be coming.
+    """
+    if elapsed_days <= 0:
+        return round(upcoming_bills, 2)
+    extrapolated = (mtd_spend / elapsed_days) * month_days if mtd_spend else 0
+    return round(extrapolated + upcoming_bills, 2)
+
+
 def calculate_safe_to_spend(
     *,
     today: date,
