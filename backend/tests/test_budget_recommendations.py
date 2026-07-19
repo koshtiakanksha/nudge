@@ -1,27 +1,16 @@
 """
 Tests for statement_analysis_service.budget_recommendations().
 
-claude_service is stubbed out at import time -- budget_recommendations()
-itself never calls it, but the module imports claude_service at load
-time, and a real ClaudeService() needs an API key this test environment
-doesn't have.
+budget_recommendations() itself never calls claude_service, but the
+module imports it at load time. That's fine here: ClaudeService falls
+back to mock_mode (no LLM call) whenever no ANTHROPIC_API_KEY is
+configured, so no stubbing is needed -- anthropic/pydantic-settings are
+already real project dependencies.
 """
-import sys
-import types
 from datetime import date, timedelta
 from types import SimpleNamespace
 
-if "app.services.claude_service" not in sys.modules:
-    _fake_claude_module = types.ModuleType("app.services.claude_service")
-
-    class _FakeClaudeService:
-        def categorize_transaction(self, merchant, raw_category=None):
-            return "Other"
-
-    _fake_claude_module.claude_service = _FakeClaudeService()
-    sys.modules["app.services.claude_service"] = _fake_claude_module
-
-from app.services.statement_analysis_service import budget_recommendations  # noqa: E402
+from app.services.statement_analysis_service import budget_recommendations
 
 
 def _txn(amount, merchant="", desc="", d=date(2026, 1, 1), cat=None, id_=None, is_recurring=False):

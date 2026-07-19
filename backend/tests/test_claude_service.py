@@ -9,16 +9,31 @@ def test_categorize_transaction_mock_mode():
 
 
 def test_generate_budget_mock_mode():
+    # Was: non_negotiables=["Groceries"] -- generate_budget now takes
+    # the full role map so compute_budget_allocation_v2 can fund in
+    # priority order, not just the non-negotiable subset.
     result = claude_service.generate_budget(
         monthly_income=5000,
         spend_ceiling=4000,
         buffer_pct=0.1,
         spending_by_category={"Groceries": 400, "Dining": 200},
-        non_negotiables=["Groceries"],
+        category_roles={"Groceries": "fixed_essential", "Dining": "discretionary"},
     )
     assert "allocations" in result
     assert result["allocations"]["Groceries"]["is_non_neg"] is True
     assert result["buffer_reserved"] == 500.0
+
+
+def test_generate_budget_funds_savings_before_discretionary():
+    result = claude_service.generate_budget(
+        monthly_income=2500,
+        spend_ceiling=None,
+        buffer_pct=0.1,
+        spending_by_category={"Rent": 1000, "Savings": 300, "Dining": 400},
+        category_roles={"Rent": "fixed_essential", "Savings": "savings_or_debt", "Dining": "discretionary"},
+    )
+    assert result["engine_version"] == "budget-engine-v2"
+    assert result["allocations"]["Savings"]["allocated"] == 300.0
 
 
 def test_price_verdict_mock_mode():
