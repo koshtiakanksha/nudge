@@ -13,10 +13,11 @@ import json
 
 from app.core.config import settings
 from app.services.budget_engine import (
-    compute_budget_allocation,
+    compute_budget_allocation_v2,
     diff_allocations,
     validate_allocation,
 )
+from app.services.category_role_service import is_non_negotiable
 
 BUDGET_PROMPT_VERSION = "budget-explain-v1"
 
@@ -85,7 +86,7 @@ class ClaudeService:
         spend_ceiling: float | None,
         buffer_pct: float,
         spending_by_category: dict[str, float],
-        non_negotiables: list[str],
+        category_roles: dict[str, str],
         previous_allocations: dict[str, dict] | None = None,
     ) -> dict:
         """
@@ -101,12 +102,22 @@ class ClaudeService:
         directly, which an evaluation harness found was only ~57%
         consistent across repeated identical requests -- unacceptable
         for a number someone might act on financially.
+
+        Was: non_negotiables: list[str], funding those first and
+        splitting everything else proportionally with no distinction
+        between a Groceries category and a Savings category -- Savings
+        had no real funding priority over discretionary spending despite
+        what the old reasoning text implied. category_roles carries the
+        full fixed_essential/variable_essential/savings_or_debt/
+        discretionary breakdown into compute_budget_allocation_v2, which
+        funds in that priority order.
         """
         ceiling = spend_ceiling or (monthly_income * (1 - buffer_pct))
         buffer_reserved = round(monthly_income * buffer_pct, 2)
         spendable = round(ceiling - buffer_reserved, 2) if ceiling else round(monthly_income - buffer_reserved, 2)
 
-        engine_result = compute_budget_allocation(spendable, buffer_reserved, spending_by_category, non_negotiables)
+        non_negotiables = [cat for cat, role in category_roles.items() if is_non_negotiable(role)]
+        engine_result = compute_budget_allocation_v2(spendable, buffer_reserved, spending_by_category, category_roles)
         is_valid, issues = validate_allocation(engine_result.allocations, spendable, non_negotiables)
         if not is_valid:
             # A hard failure here means the deterministic engine itself
@@ -141,7 +152,8 @@ class ClaudeService:
 Monthly income: ${monthly_income:.2f}
 Buffer reserved: ${engine_result.buffer_reserved:.2f} ({buffer_pct*100:.0f}% of income)
 Spendable amount: ${engine_result.spendable:.2f}
-Non-negotiable categories (funded first, from historical spend): {non_negotiables or 'none'}
+Funding order: fixed essentials (non-negotiables, funded first from historical spend) -> variable essentials -> savings/debt payments (funded before discretionary spending) -> discretionary categories (get whatever's left, split by historical weight)
+Non-negotiable categories: {non_negotiables or 'none'}
 Computed allocation: {json.dumps(engine_result.allocations)}
 
 Respond with ONLY the explanation sentence(s). No JSON, no markdown, no restating the allocation as a list."""
@@ -160,8 +172,9 @@ Respond with ONLY the explanation sentence(s). No JSON, no markdown, no restatin
         return (
             f"Allocated ${engine_result.spendable:.2f} across your categories, after reserving "
             f"${engine_result.buffer_reserved:.2f} as a safety buffer. Non-negotiable categories "
-            f"({non_neg_text}) were funded first from their historical spend, and the remainder "
-            f"was split proportionally across the rest based on your recent spending pattern.{note}"
+            f"({non_neg_text}) were funded first from their historical spend, essentials and savings "
+            f"were funded next, and discretionary categories split whatever was left based on your "
+            f"recent spending pattern.{note}"
         )
 
     # -----------------------------------------------------------------

@@ -14,7 +14,7 @@ from app.models.user import User
 from app.schemas.budget import BudgetAdjustRequest, BudgetGenerateRequest, BudgetOut, BudgetSaveRequest
 from app.services.budget_engine import diff_allocations
 from app.services.category_profile_service import build_category_profiles
-from app.services.category_role_service import is_non_negotiable, roles_for_categories
+from app.services.category_role_service import roles_for_categories
 from app.services.claude_service import claude_service
 
 router = APIRouter(prefix="/budgets", tags=["budgets"])
@@ -75,23 +75,27 @@ async def _month_spend_by_category(db: AsyncSession, user_id, month: date) -> di
     return {cat: round(total, 2) for cat, total in totals.items()}
 
 
-async def _non_negotiables_for(db: AsyncSession, user_id, spending_history: dict[str, float]) -> list[str]:
+async def _category_roles_for(db: AsyncSession, user_id, spending_history: dict[str, float]) -> dict[str, str]:
     """
     Was: a hardcoded set of 4 literal category names ({"Rent",
     "Utilities", "Utilities & Bills", "Health"}) -- it ignored whatever
     the user actually configured in Budget Categories entirely, and
     couldn't recognize a category outside that exact list no matter how
-    the user set it up.
+    the user set it up. Then: returned only the non-negotiable subset as
+    a list, which was enough for v1's fixed-vs-everything-else binary
+    but not enough for compute_budget_allocation_v2's full role-priority
+    waterfall (fixed_essential > variable_essential > savings_or_debt >
+    discretionary) -- that needs every category's role, not just which
+    ones are non-negotiable.
 
-    Now: reads the user's real BudgetCategory rows (an explicit
+    Reads the user's real BudgetCategory rows (an explicit
     category_type="fixed" always wins) and falls back to name-based
     defaults (Rent, Utilities, Insurance, etc.) for categories the user
     hasn't explicitly configured yet.
     """
     result = await db.execute(select(BudgetCategory).where(BudgetCategory.user_id == user_id))
     category_types = {c.name: c.category_type for c in result.scalars().all()}
-    roles = roles_for_categories(list(spending_history.keys()), category_types)
-    return [cat for cat, role in roles.items() if is_non_negotiable(role)]
+    return roles_for_categories(list(spending_history.keys()), category_types)
 
 
 def _normalize_allocations(raw: dict) -> dict:
@@ -141,7 +145,7 @@ async def generate_budget(
         return await _to_budget_out(db, existing)
 
     spending_history = await _category_baselines(db, current.id)
-    non_negotiables = await _non_negotiables_for(db, current.id, spending_history)
+    category_roles = await _category_roles_for(db, current.id, spending_history)
     previous_allocations = await _previous_month_allocations(db, current.id, month)
 
     ai_result = claude_service.generate_budget(
@@ -149,7 +153,7 @@ async def generate_budget(
         spend_ceiling=float(user.spend_ceiling) if user.spend_ceiling else None,
         buffer_pct=float(user.buffer_pct),
         spending_by_category=spending_history,
-        non_negotiables=non_negotiables,
+        category_roles=category_roles,
         previous_allocations=previous_allocations,
     )
 
