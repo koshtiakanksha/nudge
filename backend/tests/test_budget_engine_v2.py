@@ -57,6 +57,18 @@ def test_essential_tiers_scaled_down_together_when_tier_total_exceeds_remaining(
     assert result.allocations["Utilities"]["allocated"] == 100.0
 
 
+def test_constrained_tiers_flags_variable_essential_not_just_fixed_essential():
+    # Rent fits fine (tier 1 not constrained), but Groceries doesn't get
+    # its full ask (tier 2 constrained) -- non_negotiables_constrained
+    # only ever reflects tier 1, so this needs the broader field.
+    spending = {"Rent": 1000.0, "Groceries": 300.0}
+    roles = {"Rent": "fixed_essential", "Groceries": "variable_essential"}
+    result = compute_budget_allocation_v2(spendable=1080.0, buffer_reserved=0.0, spending_by_category=spending, category_roles=roles)
+    assert result.non_negotiables_constrained is False
+    assert "variable_essential" in result.constrained_tiers
+    assert "fixed_essential" not in result.constrained_tiers
+
+
 def test_discretionary_gets_whatever_is_left_proportionally():
     spending = {"Rent": 800.0, "Dining": 300.0, "Shopping": 100.0}
     roles = {"Rent": "fixed_essential", "Dining": "discretionary", "Shopping": "discretionary"}

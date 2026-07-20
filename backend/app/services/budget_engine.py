@@ -26,6 +26,14 @@ class AllocationResult:
     unallocated_remainder: float
     non_negotiables_constrained: bool  # True if non-negotiables alone exceeded spendable
     engine_version: str = ENGINE_VERSION
+    # Which role tiers (if any) couldn't be fully funded. v1 never
+    # populates this (stays [] via the default) -- it only ever tracked
+    # the non-negotiable tier via non_negotiables_constrained above. v2
+    # populates it for every tier (fixed_essential, variable_essential,
+    # savings_or_debt), since a squeezed variable_essential or savings
+    # tier is just as real a signal as a squeezed fixed_essential one,
+    # and callers like scenario_simulation_service need to see all of it.
+    constrained_tiers: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -35,6 +43,7 @@ class AllocationResult:
             "unallocated_remainder": self.unallocated_remainder,
             "non_negotiables_constrained": self.non_negotiables_constrained,
             "engine_version": self.engine_version,
+            "constrained_tiers": self.constrained_tiers,
         }
 
 
@@ -164,10 +173,11 @@ def compute_budget_allocation_v2(
     essential category.
 
     Known limitation: non_negotiables_constrained only flags tier 1
-    (fixed_essential) being underfunded, matching v1's field semantics.
-    variable_essential or savings_or_debt can also come up short without
-    a distinct flag yet -- worth a dedicated field if the UI needs to
-    warn about that specifically.
+    (fixed_essential) being underfunded, for backward compatibility with
+    v1's field semantics. constrained_tiers lists every tier that came
+    up short (fixed_essential, variable_essential, and/or
+    savings_or_debt) -- use that when a caller needs to know about a
+    squeezed variable_essential or savings tier, not just fixed_essential.
     """
     spending_by_category = dict(spending_by_category or {})
     category_roles = dict(category_roles or {})
@@ -185,9 +195,12 @@ def compute_budget_allocation_v2(
     allocations: dict[str, dict] = {}
     remaining = spendable
     non_negotiables_constrained = False
+    constrained_tiers: list[str] = []
     for role in ROLE_PRIORITY_ORDER:
         allocated, remaining, constrained = _fund_tier(tiers[role], remaining)
         is_non_neg = role == "fixed_essential"
+        if constrained:
+            constrained_tiers.append(role)
         if is_non_neg and constrained:
             non_negotiables_constrained = True
         for cat, amt in allocated.items():
@@ -219,6 +232,7 @@ def compute_budget_allocation_v2(
         unallocated_remainder=unallocated_remainder,
         non_negotiables_constrained=non_negotiables_constrained,
         engine_version=ENGINE_VERSION_V2,
+        constrained_tiers=constrained_tiers,
     )
 
 

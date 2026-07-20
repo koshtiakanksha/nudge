@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api import affordability, anomalies, budget_actions, budgets, chat, dashboard, forecast, plaid, statements, transactions, users
+from app.api import affordability, anomalies, budget_actions, budgets, chat, dashboard, forecast, plaid, scenarios, statements, transactions, users
 
 api_router = APIRouter()
 
@@ -15,6 +15,7 @@ api_router.include_router(forecast.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(anomalies.router)
 api_router.include_router(chat.router)
+api_router.include_router(scenarios.router)
 # price_watches and deals routers intentionally not registered -- cut from
 # product scope per the refocus roadmap (see ROADMAP.md). Code kept in
 # app/api/price_watches.py and app/api/deals.py, just not exposed.
