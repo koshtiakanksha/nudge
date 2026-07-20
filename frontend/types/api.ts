@@ -190,6 +190,7 @@ export interface TodaySummary {
   top_risk_category: string | null;
   recommended_action: string;
   remaining_safe_money: number;
+  income_source: string;
 }
 
 export interface AffordabilityCheckRequest {

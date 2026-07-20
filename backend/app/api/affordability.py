@@ -31,6 +31,7 @@ async def today(current: CurrentUser = Depends(get_current_user), db: AsyncSessi
         top_risk_category=ctx["top_risk_category"],
         recommended_action=ctx["recommended_action"],
         remaining_safe_money=safe["remaining_safe_money"],
+        income_source=ctx["income_source"],
     )
 
 

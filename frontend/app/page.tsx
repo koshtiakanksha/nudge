@@ -65,6 +65,9 @@ export default function TodayPage() {
               <CardLabel>Safe to spend today</CardLabel>
               <p className="text-4xl font-display font-semibold text-moss">{formatCurrency(today.safe_to_spend_today)}</p>
               <p className="text-lg text-ink mt-2">{today.safe_to_spend_message}</p>
+              {today.income_source === "estimated" && (
+                <p className="text-xs text-gold mt-1.5">Based on an estimated income from your transaction history -- set it manually in Settings for a firmer number.</p>
+              )}
               <Link href="/afford" className="inline-flex items-center gap-1.5 mt-4 text-sm text-moss hover:underline">
                 Check a purchase <ArrowRight size={14} />
               </Link>

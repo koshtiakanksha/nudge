@@ -17,6 +17,12 @@ class TodayOut(BaseModel):
     top_risk_category: str | None
     recommended_action: str
     remaining_safe_money: float
+    # Was computed by build_decision_context's resolve_monthly_income
+    # fallback (added when safe-to-spend stopped requiring manual
+    # income) but never passed through here -- meaning a user seeing a
+    # safe-to-spend number had no way to tell whether it was based on
+    # what they typed in or an estimate from transaction history.
+    income_source: str = "unavailable"
 
 
 class AffordabilityCheckRequest(BaseModel):
