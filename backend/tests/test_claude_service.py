@@ -36,6 +36,20 @@ def test_generate_budget_funds_savings_before_discretionary():
     assert result["allocations"]["Savings"]["allocated"] == 300.0
 
 
+def test_generate_budget_surfaces_constrained_tiers():
+    # Rent (1000) alone exceeds the ~1080 spendable at this income/buffer,
+    # so fixed_essential should show up in constrained_tiers.
+    result = claude_service.generate_budget(
+        monthly_income=1200,
+        spend_ceiling=None,
+        buffer_pct=0.1,
+        spending_by_category={"Rent": 1000, "Groceries": 300},
+        category_roles={"Rent": "fixed_essential", "Groceries": "variable_essential"},
+    )
+    assert "constrained_tiers" in result
+    assert isinstance(result["constrained_tiers"], list)
+
+
 def test_price_verdict_mock_mode():
     result = claude_service.price_verdict(
         "Test Product", 50.0, [{"date": "2026-01-01", "price": 60}, {"date": "2026-02-01", "price": 55}]

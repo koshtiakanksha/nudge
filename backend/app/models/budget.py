@@ -30,6 +30,13 @@ class Budget(Base):
     ai_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
     engine_version: Mapped[str | None] = mapped_column(Text, nullable=True)
     prompt_version: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Snapshots from compute_budget_allocation_v2 at generation time --
+    # same pattern as engine_version/prompt_version above, not
+    # recomputed on fetch. constrained_tiers: which role tiers (if any)
+    # couldn't be fully funded (e.g. ["variable_essential"]).
+    # validation_warnings: from budget_engine.validate_allocation.
+    constrained_tiers: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    validation_warnings: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

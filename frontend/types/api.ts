@@ -63,6 +63,8 @@ export interface Budget {
   ai_reasoning: string | null;
   engine_version: string | null;
   prompt_version: string | null;
+  constrained_tiers: string[];
+  validation_warnings: string[];
   changes_from_previous: BudgetChange[];
 }
 

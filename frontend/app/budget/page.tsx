@@ -408,6 +408,15 @@ export default function BudgetPage() {
                   <Card>
                     <CardLabel>Why this budget</CardLabel>
                     <p className="text-sm text-ink leading-relaxed">{budget.ai_reasoning}</p>
+                    {budget.validation_warnings && budget.validation_warnings.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-line space-y-1.5">
+                        {budget.validation_warnings.map((w, i) => (
+                          <p key={i} className="text-xs text-gold flex items-start gap-1.5">
+                            <span className="mt-0.5">⚠</span> {w}
+                          </p>
+                        ))}
+                      </div>
+                    )}
                     {budget.changes_from_previous && budget.changes_from_previous.length > 0 && (
                       <div className="mt-4 pt-4 border-t border-line space-y-1.5">
                         <p className="text-xs text-slate mb-2">Changed since last month</p>

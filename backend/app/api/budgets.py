@@ -166,6 +166,8 @@ async def generate_budget(
         existing.ai_reasoning = ai_result["reasoning"]
         existing.engine_version = ai_result["engine_version"]
         existing.prompt_version = ai_result["prompt_version"]
+        existing.constrained_tiers = ai_result["constrained_tiers"]
+        existing.validation_warnings = ai_result["validation_warnings"]
         budget = existing
     else:
         budget = Budget(
@@ -178,6 +180,8 @@ async def generate_budget(
             ai_reasoning=ai_result["reasoning"],
             engine_version=ai_result["engine_version"],
             prompt_version=ai_result["prompt_version"],
+            constrained_tiers=ai_result["constrained_tiers"],
+            validation_warnings=ai_result["validation_warnings"],
         )
         db.add(budget)
 
@@ -308,5 +312,7 @@ async def _to_budget_out(db: AsyncSession, budget: Budget) -> BudgetOut:
         ai_reasoning=budget.ai_reasoning,
         engine_version=budget.engine_version,
         prompt_version=budget.prompt_version,
+        constrained_tiers=budget.constrained_tiers or [],
+        validation_warnings=budget.validation_warnings or [],
         changes_from_previous=diff_allocations(previous_allocations, budget.allocations),
     )

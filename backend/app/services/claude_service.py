@@ -139,6 +139,7 @@ class ClaudeService:
             "prompt_version": BUDGET_PROMPT_VERSION,
             "changes_from_previous": diff_allocations(previous_allocations, engine_result.allocations),
             "validation_warnings": [i for i in issues if i.startswith("WARNING")],
+            "constrained_tiers": engine_result.constrained_tiers,
         }
 
     def _explain_allocation(self, engine_result, monthly_income, buffer_pct, non_negotiables) -> str:

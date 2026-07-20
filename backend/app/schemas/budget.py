@@ -38,6 +38,8 @@ class BudgetOut(BaseModel):
     ai_reasoning: str | None
     engine_version: str | None = None
     prompt_version: str | None = None
+    constrained_tiers: list[str] = []
+    validation_warnings: list[str] = []
     changes_from_previous: list[BudgetChange] = []
 
 
