@@ -369,3 +369,36 @@ export interface SmartBudget {
   income_stability: string;
   category_evidence: Record<string, CategoryEvidence>;
 }
+
+export interface AllocationEntry {
+  allocated: number;
+  is_non_neg: boolean;
+}
+
+export interface ScenarioChange {
+  category: string;
+  previous_amount: number;
+  current_amount: number;
+  delta: number;
+}
+
+export interface ScenarioRequest {
+  scenario_type: "category_change" | "income_change" | "one_time_expense";
+  category?: string;
+  new_amount?: number;
+  new_income_estimate?: number;
+  amount?: number;
+}
+
+export interface ScenarioResult {
+  scenario: string;
+  income_before: number;
+  income_after: number;
+  spendable_before: number;
+  spendable_after: number;
+  before_allocations: Record<string, AllocationEntry>;
+  after_allocations: Record<string, AllocationEntry>;
+  changes: ScenarioChange[];
+  risk_level: "none" | "tight" | "over_budget";
+  summary: string;
+}

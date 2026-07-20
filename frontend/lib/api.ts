@@ -216,6 +216,12 @@ export const api = {
       body: JSON.stringify({ message }),
     }),
   getChatHistory: () => request<import("@/types/api").ChatMessage[]>("/chat/history"),
+
+  simulateScenario: (payload: import("@/types/api").ScenarioRequest) =>
+    request<import("@/types/api").ScenarioResult>("/scenarios/simulate", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 };
 
 export { ApiError };

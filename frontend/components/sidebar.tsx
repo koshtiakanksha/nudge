@@ -13,6 +13,7 @@ import {
   Settings,
   Repeat,
   ShoppingBag,
+  Sliders,
 } from "lucide-react";
 import { cn } from "@/lib/format";
 import { api } from "@/lib/api";
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { href: "/forecast", label: "Forecast", icon: TrendingUp },
   { href: "/anomalies", label: "Alerts", icon: AlertTriangle },
   { href: "/budget", label: "Budget", icon: Wallet },
+  { href: "/scenarios", label: "What If", icon: Sliders },
   { href: "/afford", label: "Can I Afford This?", icon: ShoppingBag },
   { href: "/transactions", label: "Transactions", icon: Receipt },
   { href: "/recurring", label: "Bills", icon: Repeat },
