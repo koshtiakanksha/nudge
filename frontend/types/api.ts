@@ -55,6 +55,7 @@ export interface Budget {
   id: string;
   month: string;
   monthly_income: number | null;
+  income_source: string;
   total_budget: number | null;
   allocations: Record<string, BudgetAllocation>;
   buffer_reserved: number;

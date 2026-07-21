@@ -59,6 +59,8 @@ export default function BudgetPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([api.getCurrentBudget().catch(() => null), api.listBudgetCategories().catch(() => [])])
@@ -168,6 +170,26 @@ export default function BudgetPage() {
     }
   };
 
+  const generateFromHistory = async () => {
+    setGenerating(true);
+    setGenerateError(null);
+    try {
+      const result = await api.generateBudget();
+      setBudget(result);
+      setMonthlyIncome(result.monthly_income?.toString() || "");
+      setTotalBudget(result.total_budget?.toString() || result.total_allocated.toString());
+      setCategories(categoriesFromBudget(result));
+    } catch (e) {
+      setGenerateError(
+        e instanceof Error
+          ? e.message
+          : "Could not generate from history -- connect a bank account or upload a statement first."
+      );
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const rebalance = async (toCategory: string, amount: number, fromCategory?: string, action = "move_money") => {
     setRebalanceMessage(null);
     const result = await api.rebalanceBudget({ to_category: toCategory, amount, from_category: fromCategory, action });
@@ -188,11 +210,19 @@ export default function BudgetPage() {
               <Card className="bg-moss/5 border-moss/20">
                 <div className="flex items-start gap-3">
                   <Pencil className="text-moss mt-0.5" size={20} />
-                  <div>
+                  <div className="flex-1">
                     <p className="font-medium text-ink">Build your first budget</p>
                     <p className="text-sm text-slate mt-1">
                       Answer what you know, skip what you do not, then review and edit every category before saving.
                     </p>
+                    <button
+                      onClick={generateFromHistory}
+                      disabled={generating}
+                      className="mt-3 px-3 py-1.5 bg-moss text-paper rounded-md text-sm font-medium disabled:opacity-60"
+                    >
+                      {generating ? "Generating..." : "Generate from your transaction history"}
+                    </button>
+                    {generateError && <p className="text-xs text-clay mt-2">{generateError}</p>}
                   </div>
                 </div>
               </Card>
@@ -408,6 +438,9 @@ export default function BudgetPage() {
                   <Card>
                     <CardLabel>Why this budget</CardLabel>
                     <p className="text-sm text-ink leading-relaxed">{budget.ai_reasoning}</p>
+                    {budget.income_source === "estimated" && (
+                      <p className="text-xs text-gold mt-2">Income estimated from your transaction history -- set it manually in Settings for a firmer number.</p>
+                    )}
                     {budget.validation_warnings && budget.validation_warnings.length > 0 && (
                       <div className="mt-4 pt-4 border-t border-line space-y-1.5">
                         {budget.validation_warnings.map((w, i) => (

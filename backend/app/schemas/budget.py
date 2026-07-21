@@ -30,6 +30,7 @@ class BudgetOut(BaseModel):
     id: uuid.UUID
     month: date
     monthly_income: float | None = None
+    income_source: str = "unavailable"
     total_budget: float | None = None
     allocations: dict[str, BudgetAllocation]
     buffer_reserved: float

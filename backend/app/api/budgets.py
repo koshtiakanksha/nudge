@@ -13,9 +13,11 @@ from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.budget import BudgetAdjustRequest, BudgetGenerateRequest, BudgetOut, BudgetSaveRequest
 from app.services.budget_engine import diff_allocations
+from app.services.affordability_service import resolve_monthly_income
 from app.services.category_profile_service import build_category_profiles
 from app.services.category_role_service import roles_for_categories
 from app.services.claude_service import claude_service
+from app.services.income_service import detect_income
 
 router = APIRouter(prefix="/budgets", tags=["budgets"])
 
@@ -123,6 +125,22 @@ async def _with_current_spend(db: AsyncSession, budget: Budget) -> Budget:
     return budget
 
 
+async def _income_estimate_for(db: AsyncSession, user_id, user: User | None) -> tuple[float | None, str]:
+    """
+    Was: generate_budget() hard-required user.monthly_income to already
+    be manually set, raising a 400 otherwise -- even though
+    income_service could derive an estimate from linked transaction
+    history, exactly like decision_context.py's safe-to-spend and the
+    scenarios endpoint already do. Manual entry still always wins when
+    present; this only fills the gap when nothing was ever typed in.
+    """
+    user_income = float(user.monthly_income) if user and user.monthly_income is not None else None
+    if user_income is not None:
+        return user_income, "manual"
+    txns = (await db.execute(select(Transaction).where(Transaction.user_id == user_id))).scalars().all()
+    return resolve_monthly_income(None, detect_income(txns))
+
+
 @router.post("/generate", response_model=BudgetOut)
 async def generate_budget(
     payload: BudgetGenerateRequest,
@@ -131,8 +149,16 @@ async def generate_budget(
 ):
     user_result = await db.execute(select(User).where(User.id == current.id))
     user = user_result.scalar_one_or_none()
-    if user is None or user.monthly_income is None:
-        raise HTTPException(status_code=400, detail="Complete onboarding (set monthly income) before generating a budget")
+    if user is None:
+        raise HTTPException(status_code=400, detail="Complete onboarding before generating a budget")
+
+    monthly_income, income_source = await _income_estimate_for(db, current.id, user)
+    if monthly_income is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Not enough transaction history to estimate your income yet -- "
+                   "set it manually in Settings, or connect a bank account / upload a statement.",
+        )
 
     month = _month_start(payload.month or date.today())
 
@@ -149,7 +175,7 @@ async def generate_budget(
     previous_allocations = await _previous_month_allocations(db, current.id, month)
 
     ai_result = claude_service.generate_budget(
-        monthly_income=float(user.monthly_income),
+        monthly_income=monthly_income,
         spend_ceiling=float(user.spend_ceiling) if user.spend_ceiling else None,
         buffer_pct=float(user.buffer_pct),
         spending_by_category=spending_history,
@@ -168,6 +194,7 @@ async def generate_budget(
         existing.prompt_version = ai_result["prompt_version"]
         existing.constrained_tiers = ai_result["constrained_tiers"]
         existing.validation_warnings = ai_result["validation_warnings"]
+        existing.income_estimate = monthly_income
         budget = existing
     else:
         budget = Budget(
@@ -177,6 +204,7 @@ async def generate_budget(
             buffer_reserved=ai_result["buffer_reserved"],
             total_allocated=total_allocated,
             generated_by_ai=True,
+            income_estimate=monthly_income,
             ai_reasoning=ai_result["reasoning"],
             engine_version=ai_result["engine_version"],
             prompt_version=ai_result["prompt_version"],
@@ -300,10 +328,23 @@ async def _to_budget_out(db: AsyncSession, budget: Budget) -> BudgetOut:
     user_result = await db.execute(select(User).where(User.id == budget.user_id))
     user = user_result.scalar_one_or_none()
     previous_allocations = await _previous_month_allocations(db, budget.user_id, budget.month)
+    # Was: monthly_income read only from the live user.monthly_income --
+    # None for any budget generated from an estimated income (there was
+    # no other way to see that figure once generated, since
+    # income_estimate was never even persisted). Now prefers the live
+    # manual value when set, falls back to what was actually used when
+    # this budget was generated.
+    if user and user.monthly_income is not None:
+        monthly_income, income_source = float(user.monthly_income), "manual"
+    elif budget.income_estimate is not None:
+        monthly_income, income_source = float(budget.income_estimate), "estimated"
+    else:
+        monthly_income, income_source = None, "unavailable"
     return BudgetOut(
         id=budget.id,
         month=budget.month,
-        monthly_income=float(user.monthly_income) if user and user.monthly_income is not None else None,
+        monthly_income=monthly_income,
+        income_source=income_source,
         total_budget=float(user.spend_ceiling) if user and user.spend_ceiling is not None else None,
         allocations=budget.allocations,
         buffer_reserved=float(budget.buffer_reserved),
